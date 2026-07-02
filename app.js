@@ -432,7 +432,7 @@ function renderCustomizeSummaries() {
   const n = draft.stations.length;
   $("custStationCount").textContent = n + (n === 1 ? " station" : " stations");
   $("custLadder").textContent = draft.ladder.map(x => x[0]).join("·") + "s";
-  const snd = [draft.voice ? "Voice" : null, draft.ticks ? "Beeps" : null, draft.haptics ? "Haptics" : null].filter(Boolean).join(" · ") || "Silent";
+  const snd = [draft.voice ? "Voice" : null, draft.ticks ? "Beeps" : null, draft.halfChime ? "Chime" : null, draft.haptics ? "Haptics" : null].filter(Boolean).join(" · ") || "Silent";
   $("custThemeSound").textContent = draft.theme + " · " + snd;
 }
 
