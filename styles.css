@@ -267,3 +267,30 @@
   color:var(--on-person);
   border-color:transparent;
 }
+
+/* =========================================================================
+   Task 9 — Big-screen (landscape) color-coded circuit + person legend.
+   Left column = full station list (#bigCircuit); right column reuses the
+   existing .wrap live timer. Person legend (#legend) lives inside .wrap.
+   ========================================================================= */
+.bigcircuit{ display:none; }
+.plegend{ display:none; flex-wrap:wrap; gap:5px 12px; justify-content:center; margin-top:10px; }
+.plegend span{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); display:flex; align-items:center; gap:5px; }
+.plegend i{ width:11px; height:11px; border-radius:3px; display:inline-block; }
+/* station rows (ported from the mock's .bs .st, keyed to real markup) */
+.bigcircuit .st{ display:flex; align-items:center; gap:12px; border:1px solid var(--line); border-radius:12px; padding:9px 12px; background:var(--panel); position:relative; overflow:hidden; transition:background .25s, border-color .25s; }
+.bigcircuit .st .num{ font-family:'Anton',sans-serif; font-size:24px; width:26px; text-align:center; flex:none; color:var(--line); }
+.bigcircuit .st .nm{ font-family:'Barlow Condensed',sans-serif; font-weight:700; text-transform:uppercase; font-size:18px; flex:1; line-height:1; }
+.bigcircuit .st .who{ font-family:'Barlow Condensed',sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:.08em; font-size:13px; padding:3px 11px; border-radius:999px; flex:none; }
+.bigcircuit .st .rep{ font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:12px; color:var(--dim); flex:none; width:46px; text-align:right; }
+.bigcircuit .st.lit{ border-color:transparent; }
+.bigcircuit .st.lit .num{ color:#0b0c0e; opacity:.55; }
+.bigcircuit .st.lit .nm{ color:#0b0c0e; }
+.bigcircuit .st.lit .who{ background:#0b0c0e22; color:#0b0c0e; }
+.bigcircuit .st.lit .rep{ color:#0b0c0e; opacity:.7; }
+@media (min-width:900px) and (orientation:landscape){
+  #screen-live.active{ display:grid; grid-template-columns:1.35fr 1fr; gap:16px; align-items:start; max-width:960px; margin:0 auto; }
+  .bigcircuit{ display:flex; flex-direction:column; gap:9px; }
+  #personCards{ display:none; }   /* the circuit list replaces the per-person cards on wide screens */
+  .plegend{ display:flex; }
+}

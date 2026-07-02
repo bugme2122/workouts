@@ -80,6 +80,7 @@ function renderDots(){ let h=""; for(let i=0;i<LADN;i++) h+="<i></i>"; elDots.in
 function setupView(){
   elLad.textContent = config.ladder.map(x=>x[0]).join("·")+"s";
   renderDots();
+  renderLegend();
 }
 
 function personLabel(k){
@@ -106,6 +107,39 @@ function renderPersonCards(block){
   });
 }
 
+function renderBigCircuit(block) {
+  const host = document.getElementById("bigCircuit");
+  if (!host) return;
+  const occ = occupants(block, config.people, N);
+  const byStation = {};
+  occ.forEach(o => { byStation[o.station] = o.person; });
+  host.innerHTML = "";
+  for (let i = 0; i < N; i++) {
+    const s = config.stations[i];
+    const person = byStation[i];
+    const lit = person !== undefined;
+    const row = document.createElement("div");
+    row.className = "st" + (lit ? " lit" : "");
+    if (lit) row.style.background = "var(--p" + (person + 1) + ")";
+    row.innerHTML =
+      '<span class="num">' + (i + 1) + '</span>' +
+      '<span class="nm">' + esc(s.ex || "—") + '</span>' +
+      (lit ? '<span class="who">' + esc(personLabel(person)) + '</span>' : '<span class="who"></span>') +
+      '<span class="rep">' + esc(s.rep || "") + '</span>';
+    host.appendChild(row);
+  }
+}
+
+function renderLegend() {
+  const el = document.getElementById("legend");
+  if (!el) return;
+  let h = "";
+  for (let k = 0; k < config.people; k++) {
+    h += '<span><i style="background:var(--p' + (k + 1) + ')"></i>' + esc(personLabel(k)) + '</span>';
+  }
+  el.innerHTML = h;
+}
+
 function render(){
   const p=phases[idx]; if(!p) return;
   let disp = (p.block!==undefined)?p.block:0, rot=false;
@@ -129,6 +163,7 @@ function render(){
   elRot.classList.toggle("show", rot);
 
   renderPersonCards(disp);
+  renderBigCircuit(disp);
   document.querySelectorAll("#personCards .pcard").forEach(c=>c.classList.toggle("rotate-flash", rot));
 
   const elapsed = cum[idx] + (p.type==="prep"?0:(p.dur - remaining/1000));
