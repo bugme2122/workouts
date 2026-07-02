@@ -190,7 +190,7 @@ function loop(){
   if((p.type==="work"||p.type==="rest"||p.type==="prep")&&secLeft<=3&&secLeft>=1&&secLeft!==beepSec){ beepSec=secLeft; sTick(); }
   while(remaining<=0){
     const leftover=remaining; idx++;
-    if(idx>=phases.length){ finished=true; running=false; idx=phases.length-1; releaseWake(); sDone(); say("Workout complete"); remaining=0; render(); return; }
+    if(idx>=phases.length){ finished=true; running=false; idx=phases.length-1; releaseWake(); sDone(); say("Workout complete"); remaining=0; render(); showComplete(); return; }
     const np=phases[idx]; enterPhase(np, np.type==="work"&&np.iv===0);
     remaining=np.dur*1000+leftover; beepSec=null;
   }
@@ -204,7 +204,24 @@ function start(){
   if(idx===0 && phases[0].type==="prep") say("Get ready");
   render(); rafId=requestAnimationFrame(loop);
 }
-function reset(){ running=false; finished=false; if(rafId) cancelAnimationFrame(rafId); releaseWake(); idx=0; remaining=phases[0].dur*1000; beepSec=null; render(); }
+function reset(){ running=false; finished=false; if(rafId) cancelAnimationFrame(rafId); releaseWake(); idx=0; remaining=phases[0].dur*1000; beepSec=null; render();
+  $("doneCard").hidden = true; elTcard.style.display = ""; }
+
+function showComplete() {
+  const card = $("doneCard");
+  const sum = $("doneSum");
+  const who = config.people === 1 ? "solo" : (config.people + " people");
+  sum.innerHTML =
+    "<b>" + fmt(WORKOUT_TOTAL) + "</b> total · <b>" + TOTBLOCKS + "</b> blocks · <b>" +
+    N + "</b> stations · " + who;
+  card.hidden = false;
+  elTcard.style.display = "none"; // hide the ring card
+}
+$("doneRestart").addEventListener("click", () => {
+  $("doneCard").hidden = true;
+  elTcard.style.display = "";
+  reset(); showScreen("home");
+});
 
 btnStart.addEventListener("click",start);
 btnReset.addEventListener("click",reset);

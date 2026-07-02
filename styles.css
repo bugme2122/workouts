@@ -93,6 +93,13 @@
   .dots i.on{background:var(--accent);border-color:transparent;transform:scale(1.18)}
   .dots i.done{background:var(--dim);border-color:transparent}
 
+  .donecard{ text-align:center; padding:26px 18px; border:1px solid var(--work); border-radius:22px;
+    background:linear-gradient(180deg,#16181d,#0e1014); display:flex; flex-direction:column; gap:14px; align-items:center; }
+  .donebig{ font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    font-size:26px; color:var(--work); }
+  .donesum{ font-family:'Barlow Condensed',sans-serif; font-weight:600; letter-spacing:.06em; color:var(--dim); }
+  .donesum b{ color:var(--ink); }
+
   .pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .pair.solo{grid-template-columns:1fr}
   .pair.solo .cardB{display:none}
