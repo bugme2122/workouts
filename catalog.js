@@ -1,3 +1,7 @@
+import { enc, dec, sanitize, sameCircuit, lightDelta, applyLight } from "./engine.js";
+
+export { sanitize };
+
 export const YT = q => "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
 
 export const THEMES = {
@@ -112,4 +116,37 @@ export function workoutToConfig(w) {
     targetMin: w.targetMin ?? 0,
     personNames: [],
   };
+}
+
+// Build the sanitized baseline config for a catalog workout id (or null).
+function baselineFor(id) {
+  const w = WORKOUTS.find(x => x.id === id);
+  return w ? sanitize(workoutToConfig(w)) : null;
+}
+
+// Encode a config to the shortest lossless hash body (no leading '#').
+export function encShare(config) {
+  const base = baselineFor(config.workoutId);
+  if (base && sameCircuit(config, base)) {
+    const d = lightDelta(config, base);
+    const tail = Object.keys(d).length ? "~" + enc(d) : "";
+    return "w=" + encodeURIComponent(config.workoutId) + tail;
+  }
+  return "c=" + enc(config);
+}
+
+// Decode a hash body ('w=…' or 'c=…', optional leading '#') back to a config, or null.
+export function decShare(str) {
+  if (!str) return null;
+  const body = str.replace(/^#/, "");
+  if (body.startsWith("w=")) {
+    const rest = body.slice(2);
+    const ti = rest.indexOf("~");
+    const id = decodeURIComponent(ti >= 0 ? rest.slice(0, ti) : rest);
+    const delta = ti >= 0 ? (dec(rest.slice(ti + 1)) || {}) : {};
+    const base = baselineFor(id) || sanitize(JSON.parse(JSON.stringify(DEFAULT)));
+    return applyLight(base, delta);
+  }
+  if (body.startsWith("c=")) return dec(body.slice(2));
+  return null;
 }

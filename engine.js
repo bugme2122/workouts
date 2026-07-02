@@ -116,3 +116,26 @@ export function secondCue(phase, secLeft) {
   }
   return out;
 }
+
+// --- Short share-link helpers (pure) ---
+export const LIGHT_FIELDS = [
+  "people", "personNames", "targetMin", "theme", "prep", "volume",
+  "voice", "ticks", "haptics", "keepAwake", "halfChime",
+];
+
+export function sameCircuit(a, b) {
+  return JSON.stringify(a.stations) === JSON.stringify(b.stations)
+      && JSON.stringify(a.ladder) === JSON.stringify(b.ladder);
+}
+
+export function lightDelta(config, base, fields = LIGHT_FIELDS) {
+  const d = {};
+  for (const f of fields) {
+    if (JSON.stringify(config[f]) !== JSON.stringify(base[f])) d[f] = config[f];
+  }
+  return d;
+}
+
+export function applyLight(base, delta) {
+  return { ...base, ...(delta || {}) };
+}
