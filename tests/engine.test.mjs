@@ -86,3 +86,14 @@ test("occupants never returns an out-of-range station when block >= N (F1)", () 
     }
   }
 });
+
+test("sanitize(migrate(...)) repairs empty stations and clamps people (load-path guard)", () => {
+  const c = sanitize(migrate({ stations: [], people: 6, ladder: [[20, 10]] }));
+  assert.ok(c.stations.length >= 1, "stations repaired to non-empty");
+  assert.ok(c.people >= 1 && c.people <= Math.min(6, c.stations.length), "people clamped to stations");
+});
+test("sanitize drops non-http(s) station urls", () => {
+  const c = sanitize({ people: 1, prep: 5, targetMin: 0, volume: 0.8,
+    ladder: [[20, 10]], stations: [{ ex: "X", url: "javascript:alert(1)" }] });
+  assert.equal(c.stations[0].url, "");
+});

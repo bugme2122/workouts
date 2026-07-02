@@ -83,7 +83,7 @@ export function sanitize(c) {
     ex: (s.ex || "").trim() || "Exercise",
     gear: (s.gear || "").trim(),
     rep: (s.rep || "").trim(),
-    url: s.url || "",
+    url: (/^https?:\/\//i.test(s.url || "")) ? s.url : "",
   }));
   if (!c.stations.length) c.stations = [{ ex: "Exercise", gear: "", rep: "" }];
   c.ladder = (c.ladder || []).map(p => [

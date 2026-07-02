@@ -245,23 +245,6 @@
   .hint{font-size:11px;color:var(--dim);font-family:'Barlow',sans-serif}
 
 /* =========================================================================
-   Per-person palette helpers (from design-tokens.css). Used by Tasks 8-9.
-   Included now but not referenced by the current markup.
-   ========================================================================= */
-.person.p1{ --person:var(--p1); }
-.person.p2{ --person:var(--p2); }
-.person.p3{ --person:var(--p3); }
-.person.p4{ --person:var(--p4); }
-.person.p5{ --person:var(--p5); }
-.person.p6{ --person:var(--p6); }
-
-.station.lit{
-  background:var(--person);
-  color:var(--on-person);
-  border-color:transparent;
-}
-
-/* =========================================================================
    Task 9 — Big-screen (landscape) color-coded circuit + person legend.
    Left column = full station list (#bigCircuit); right column reuses the
    existing .wrap live timer. Person legend (#legend) lives inside .wrap.

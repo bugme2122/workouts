@@ -15,9 +15,9 @@ const clone = o => JSON.parse(JSON.stringify(o));
 function loadConfig(){
   const h=location.hash||"";
   const i=h.indexOf("c=");
-  if(i>=0){ const c=dec(h.slice(i+2)); if(c) return migrate(c); }
-  try{ const s=localStorage.getItem("ladder.last"); if(s){ const c=JSON.parse(s); if(c) return migrate(c); } }catch(e){}
-  return clone(DEFAULT);
+  if(i>=0){ const c=dec(h.slice(i+2)); if(c) return sanitize(migrate(c)); }
+  try{ const s=localStorage.getItem("ladder.last"); if(s){ const c=JSON.parse(s); if(c) return sanitize(migrate(c)); } }catch(e){}
+  return sanitize(clone(DEFAULT));
 }
 function persist(){
   try{ localStorage.setItem("ladder.last", JSON.stringify(config)); }catch(e){}
@@ -361,7 +361,7 @@ function renderCatalog() {
       '<div class="exmini">' + w.stations.map(s => '<span>' + esc(s.ex) + '</span>').join("") + '</div>' +
       '<div class="wfoot"><button class="cust">Customize</button><button class="go">Start ▸</button></div>';
     card.querySelector(".cust").onclick = () => openCustomize(w);
-    card.querySelector(".go").onclick = () => { config = sanitize(workoutToConfig(w)); startLive(); };
+    card.querySelector(".go").onclick = () => { config = sanitize(workoutToConfig(w)); persist(); startLive(); };
     stack.appendChild(card);
   });
 }
