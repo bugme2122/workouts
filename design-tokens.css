@@ -1,0 +1,67 @@
+/* =========================================================================
+   Ladder Circuit Timer — design tokens
+   Captured during brainstorm 2026-06-29. Single source of truth for color.
+   These mirror the existing app and add the per-person palette introduced
+   for the big-screen color-coded circuit.
+   ========================================================================= */
+
+:root{
+  /* ---- Surfaces & text (unchanged from the current app) ---- */
+  --bg:#0b0c0e;        /* page background base */
+  --panel:#15171c;     /* cards, rows */
+  --panel2:#1d2026;    /* insets, track backgrounds, unfilled ring */
+  --ink:#f5f4ee;       /* primary text */
+  --dim:#7d828c;       /* secondary / muted text */
+  --line:#2a2e36;      /* borders, hairlines */
+
+  /* ---- Phase colors (drive the timer ring + phase label) ---- */
+  --work:#c6f24e;      /* WORK   — lime */
+  --rest:#ffb13d;      /* REST   — amber */
+  --rotate:#ff4d6d;    /* ROTATE — red/pink */
+  --prep:#56d3ff;      /* GET READY — cyan */
+  --accent:var(--prep);/* live accent, swapped per phase in JS */
+
+  /* ---- Per-person palette (NEW: color-codes each athlete on the
+          big-screen circuit). Up to 6 people. Chosen for distinctness
+          AND enough luminance to carry dark text on a filled row. ---- */
+  --p1:#c6f24e;  /* Person 1 — lime   */
+  --p2:#56d3ff;  /* Person 2 — cyan   */
+  --p3:#ff8a3d;  /* Person 3 — orange */
+  --p4:#ff5c9e;  /* Person 4 — pink   */
+  --p5:#b285ff;  /* Person 5 — violet */
+  --p6:#ffd23d;  /* Person 6 — amber  */
+
+  /* Text color to lay over a person-filled row (all 6 are light enough
+     that near-black reads cleanly on top). */
+  --on-person:#0b0c0e;
+
+  /* ---- Page background gradient + film-grain overlay opacity ---- */
+  --bg-grad:radial-gradient(120% 80% at 50% -10%, #181b21 0%, var(--bg) 55%);
+  --grain-opacity:.04;
+}
+
+/* Convenience: map a person index to its color.
+   Usage: <div class="person p3"> ... </div>  */
+.person.p1{ --person:var(--p1); }
+.person.p2{ --person:var(--p2); }
+.person.p3{ --person:var(--p3); }
+.person.p4{ --person:var(--p4); }
+.person.p5{ --person:var(--p5); }
+.person.p6{ --person:var(--p6); }
+
+/* A station row "lit" by the person currently working it. */
+.station.lit{
+  background:var(--person);
+  color:var(--on-person);
+  border-color:transparent;
+}
+
+/* =========================================================================
+   Selectable themes (from the current app's THEMES map).
+   Switching theme only remaps the four phase colors; surfaces stay dark.
+   ========================================================================= */
+[data-theme="Volt"] { --work:#c6f24e; --rest:#ffb13d; --rotate:#ff4d6d; --prep:#56d3ff; }
+[data-theme="Ember"]{ --work:#ff7a2e; --rest:#ffd23d; --rotate:#ff2e7a; --prep:#5fd0ff; }
+[data-theme="Ice"]  { --work:#42e8ff; --rest:#8a8fff; --rotate:#ff5c8a; --prep:#bdfff0; }
+[data-theme="Mono"] { --work:#f1f1ea; --rest:#9aa0aa; --rotate:#ff5b5b; --prep:#6aa6ff; }
+[data-theme="Candy"]{ --work:#ff5cae; --rest:#ffe14d; --rotate:#a05cff; --prep:#4ce0ff; }
