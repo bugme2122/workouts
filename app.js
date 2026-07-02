@@ -1,5 +1,6 @@
 import {
   THEMES, LADDERS, LENGTHS, EXERCISES, DEFAULT, WORKOUTS, howto, workoutToConfig,
+  encShare, decShare,
 } from "./catalog.js";
 import {
   blockLenOf, blocksFor, buildPhases, enc, dec, migrate, sanitize,
@@ -13,15 +14,14 @@ const clone = o => JSON.parse(JSON.stringify(o));
 
 // ---------- config persistence ----------
 function loadConfig(){
-  const h=location.hash||"";
-  const i=h.indexOf("c=");
-  if(i>=0){ const c=dec(h.slice(i+2)); if(c) return sanitize(migrate(c)); }
+  const body=(location.hash||"").replace(/^#/,"");
+  if(body.startsWith("w=")||body.startsWith("c=")){ const c=decShare(body); if(c) return sanitize(migrate(c)); }
   try{ const s=localStorage.getItem("ladder.last"); if(s){ const c=JSON.parse(s); if(c) return sanitize(migrate(c)); } }catch(e){}
   return sanitize(clone(DEFAULT));
 }
 function persist(){
   try{ localStorage.setItem("ladder.last", JSON.stringify(config)); }catch(e){}
-  try{ history.replaceState(null,"","#c="+enc(config)); }catch(e){}
+  try{ history.replaceState(null,"","#"+encShare(config)); }catch(e){}
 }
 function getPresets(){ try{ return JSON.parse(localStorage.getItem("ladder.presets")||"{}"); }catch(e){ return {}; } }
 function setPresets(o){ try{ localStorage.setItem("ladder.presets", JSON.stringify(o)); }catch(e){} }
@@ -333,7 +333,7 @@ $("volInput").oninput=e=>draft.volume=(parseInt(e.target.value)||0)/100;
 document.querySelectorAll(".sw-toggle").forEach(t=>{ t.onclick=()=>{ draft[t.dataset.tog]=!draft[t.dataset.tog]; t.classList.toggle("on",draft[t.dataset.tog]); }; });
 $("savePreset").onclick=()=>{ const nm=($("presetName").value||"").trim(); if(!nm) return; const o=getPresets(); o[nm]=sanitize(clone(draft)); setPresets(o); $("presetName").value=""; renderPresets(); };
 $("resetDefault").onclick=()=>{ draft=clone(DEFAULT); applyTheme(draft.theme); fillSettings(); };
-$("copyLink").onclick=()=>{ const link=location.origin+location.pathname+"#c="+enc(sanitize(clone(draft)));
+$("copyLink").onclick=()=>{ const link=location.origin+location.pathname+"#"+encShare(sanitize(clone(draft)));
   const out=$("linkOut"); out.textContent=link; out.classList.add("show");
   try{ navigator.clipboard.writeText(link).then(()=>{ $("copyLink").textContent="✓ Link copied"; setTimeout(()=>{$("copyLink").innerHTML="&#128279; Copy shareable link";},1600); }); }catch(e){}
 };
@@ -447,7 +447,7 @@ $("buildOwn").onclick = () => openCustomize(null);
 // ---------- init ----------
 applyTheme(config.theme);
 renderCatalog();
-const hasShared = (location.hash || "").indexOf("c=") >= 0;
+const hasShared = /^#?[wc]=/.test(location.hash || "");
 showScreen(hasShared ? "live" : "home");
 if (hasShared) { build(); setupView(); reset(); }
 
