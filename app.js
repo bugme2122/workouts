@@ -30,12 +30,11 @@ let config = loadConfig();
 
 // ---------- derived / phases ----------
 const RING_C = 2*Math.PI*108;
-let phases=[], cum=[], WORKOUT_TOTAL=0, N=0, OFFSET=1, LADN=0, TOTBLOCKS=0;
+let phases=[], cum=[], WORKOUT_TOTAL=0, N=0, LADN=0, TOTBLOCKS=0;
 function build(){
   const r = buildPhases(config);
   phases = r.phases; cum = r.cum; WORKOUT_TOTAL = r.total;
   N = r.N; LADN = r.LADN; TOTBLOCKS = r.TOTBLOCKS;
-  OFFSET = Math.max(1, Math.floor(N/2)); // still used by the legacy 2-card render until Task 7
 }
 
 // ---------- audio / voice / haptics ----------
@@ -69,10 +68,7 @@ let idx=0, remaining=0, running=false, finished=false, last=0, beepSec=null, raf
 // ---------- elements ----------
 const elPhase=$("phase"),elNum=$("num"),elIv=$("ivlabel"),elTot=$("tot"),elProg=$("progbar"),
   elRing=$("ring"),elTcard=$("tcard"),elRot=$("rotban"),elBlk=$("blklab"),elLad=$("ladlab"),elElap=$("elap"),
-  elPair=$("pair"),elWhoA=$("whoA"),elDots=$("dots"),
-  elExA=$("exA"),elGearA=$("gearA"),elRepA=$("repA"),elNumA=$("numA"),
-  elExB=$("exB"),elGearB=$("gearB"),elRepB=$("repB"),elNumB=$("numB"),elQA=$("qA"),elQB=$("qB"),
-  cardA=document.querySelector(".cardA"),cardB=document.querySelector(".cardB"),
+  elDots=$("dots"),
   btnStart=$("startbtn"),btnReset=$("resetbtn");
 
 function fmt(s){ s=Math.max(0,Math.round(s)); const m=Math.floor(s/60),r=s%60; return m+":"+String(r).padStart(2,"0"); }
@@ -82,10 +78,32 @@ function accentVar(p,rot){ if(finished) return "var(--work)"; if(p.type==="prep"
 
 function renderDots(){ let h=""; for(let i=0;i<LADN;i++) h+="<i></i>"; elDots.innerHTML=h; }
 function setupView(){
-  elPair.classList.toggle("solo", config.people===1);
-  elWhoA.textContent = config.people===1 ? "Current" : "Partner A";
   elLad.textContent = config.ladder.map(x=>x[0]).join("·")+"s";
   renderDots();
+}
+
+function personLabel(k){
+  return (config.personNames && config.personNames[k] && config.personNames[k].trim())
+    ? config.personNames[k].trim() : "P"+(k+1);
+}
+
+function renderPersonCards(block){
+  const host = document.getElementById("personCards");
+  const occ = occupants(block, config.people, N);
+  host.innerHTML = "";
+  occ.forEach(o=>{
+    const s = config.stations[o.station];      // o.station already wrapped — F1 safe
+    const card = document.createElement("div");
+    card.className = "pcard";
+    card.style.setProperty("--person", "var(--p"+(o.person+1)+")");
+    card.innerHTML =
+      '<div class="stnum">'+(o.station+1)+'</div>'+
+      '<div class="who" style="color:var(--person)">'+esc(personLabel(o.person))+'</div>'+
+      '<div class="ex">'+esc(s.ex || "—")+'</div>'+
+      '<div class="meta"><span class="tag gear">'+esc(s.gear || "")+'</span>'+
+      '<span class="tag">'+esc(s.rep || "")+'</span></div>';
+    host.appendChild(card);
+  });
 }
 
 function render(){
@@ -109,13 +127,9 @@ function render(){
   for(let i=0;i<dots.length;i++){ dots[i].className=""; if(p.type==="prep"||finished) continue; if(i<p.iv) dots[i].className="done"; else if(i===p.iv) dots[i].className="on"; }
 
   elRot.classList.toggle("show", rot);
-  cardA.classList.toggle("rotate-flash", rot); cardB.classList.toggle("rotate-flash", rot && config.people>1);
 
-  const A=config.stations[disp % N];
-  const B=config.stations[(disp+OFFSET)%N];
-  elExA.textContent=A.ex||"—"; elGearA.textContent=A.gear||""; elRepA.textContent=A.rep||""; elNumA.textContent=(disp%N)+1;
-  elExB.textContent=B.ex||"—"; elGearB.textContent=B.gear||""; elRepB.textContent=B.rep||""; elNumB.textContent=((disp+OFFSET)%N)+1;
-  elQA.href=howto(A); elQB.href=howto(B);
+  renderPersonCards(disp);
+  document.querySelectorAll("#personCards .pcard").forEach(c=>c.classList.toggle("rotate-flash", rot));
 
   const elapsed = cum[idx] + (p.type==="prep"?0:(p.dur - remaining/1000));
   const e = finished?WORKOUT_TOTAL:Math.max(0,Math.min(WORKOUT_TOTAL,elapsed));
@@ -128,7 +142,9 @@ function render(){
 }
 
 function enterPhase(p,firstWorkOfBlock){
-  if(p.type==="work"){ sWork(); buzz([50,40,80]); say( (config.people===1&&firstWorkOfBlock) ? config.stations[p.block].ex : "Work" ); }
+  if(p.type==="work"){ sWork(); buzz([50,40,80]);
+    if(config.people===1&&firstWorkOfBlock){ const st=occupants(p.block,1,N)[0].station; say(config.stations[st].ex); }
+    else say("Work"); }
   else if(p.type==="rest"){ const rot=(p.iv===LADN-1&&p.block<TOTBLOCKS-1); if(rot){ sRotate(); buzz([80,50,80,50,160]); say("Rotate. Switch stations."); } else { sRest(); buzz([120]); say("Rest"); } }
 }
 

@@ -102,6 +102,12 @@
   .card .who{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.16em;font-size:12px;color:var(--dim);text-transform:uppercase}
   .card .ex{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:21px;line-height:1.02;margin-top:5px;text-transform:uppercase}
   .card .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  #personCards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px 13px;position:relative;overflow:hidden}
+  .pcard .who{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.16em;font-size:12px;text-transform:uppercase}
+  .pcard .ex{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:21px;line-height:1.02;margin-top:5px;text-transform:uppercase}
+  .pcard .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .pcard.rotate-flash{animation:flash 1s ease-in-out infinite}
   .tag{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;
     padding:3px 8px;border-radius:999px;background:var(--panel2);color:var(--ink)}
   .tag.gear{color:#0b0c0e;background:var(--accent)}

@@ -77,3 +77,12 @@ test("sanitize clamps people to station count and trims names", () => {
   assert.equal(c.people, 3);            // capped to 3 stations
   assert.equal(c.personNames.length, 3); // trimmed to people
 });
+
+test("occupants never returns an out-of-range station when block >= N (F1)", () => {
+  const N = 6, P = 1;
+  for (let block = 0; block < 20; block++) {
+    for (const o of occupants(block, P, N)) {
+      assert.ok(o.station >= 0 && o.station < N, `station ${o.station} out of range at block ${block}`);
+    }
+  }
+});
