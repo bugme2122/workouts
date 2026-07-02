@@ -148,6 +148,43 @@
   .browse{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:13px;
     background:transparent;border:1px dashed var(--line);color:var(--dim);border-radius:11px;padding:12px;cursor:pointer;width:100%}
 
+  /* ---- Customize screen (ported from the customize.html mock) ---- */
+  /* Home + Customize use the lime WORK color as their accent (Go / Start). */
+  #screen-home, #screen-customize{ --accent: var(--work); }
+  #screen-customize .cz{width:100%;max-width:380px;margin:0 auto;
+    background:radial-gradient(120% 80% at 50% -10%,#181b21,#0b0c0e 55%);
+    border:1px solid var(--line);border-radius:20px;color:var(--ink);overflow:hidden}
+  #screen-customize .top{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#0e1014;z-index:2}
+  #screen-customize .back{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:.08em;cursor:pointer}
+  #screen-customize .ttl{font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;font-size:18px;flex:1}
+  #screen-customize .body{padding:16px;display:flex;flex-direction:column;gap:18px}
+  #screen-customize .lab{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--dim);margin-bottom:9px}
+  /* people picker */
+  #screen-customize .people{display:flex;gap:7px}
+  #screen-customize .pp{flex:1;aspect-ratio:1;border-radius:12px;border:1px solid var(--line);background:var(--panel);display:grid;place-items:center;font-family:'Anton',sans-serif;font-size:22px;color:var(--dim);cursor:pointer}
+  #screen-customize .pp.on.pp1{background:var(--p1);color:#0b0c0e}
+  #screen-customize .pp.on.pp2{background:var(--p2);color:#0b0c0e}
+  #screen-customize .pp.on.pp3{background:var(--p3);color:#0b0c0e}
+  #screen-customize .pp.on.pp4{background:var(--p4);color:#0b0c0e}
+  #screen-customize .pp.on.pp5{background:var(--p5);color:#0b0c0e}
+  #screen-customize .pp.on.pp6{background:var(--p6);color:#0b0c0e}
+  #screen-customize .pp.disabled{opacity:.35;pointer-events:none}
+  #screen-customize .names{display:flex;flex-direction:column;gap:7px;margin-top:11px}
+  #screen-customize .nrow{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:7px 9px}
+  #screen-customize .dot{width:16px;height:16px;border-radius:5px;flex:none}
+  #screen-customize .nrow input{font-family:'Barlow',sans-serif;font-size:14px;background:transparent;border:none;color:var(--ink);width:100%;outline:none}
+  #screen-customize .nhint{font-size:11px;color:var(--dim);margin-top:8px}
+  /* collapsed section summaries */
+  #screen-customize .sec{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px}
+  #screen-customize .sechead{display:flex;align-items:center;justify-content:space-between}
+  #screen-customize .sechead .nm{font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;font-size:14px}
+  #screen-customize .sechead .v{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12px;color:var(--dim);cursor:pointer}
+  #screen-customize .chips{display:flex;flex-wrap:wrap;gap:6px}
+  #screen-customize .chips button{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12px;text-transform:uppercase;border:1px solid var(--line);background:var(--panel2);color:var(--dim);border-radius:8px;padding:5px 9px;cursor:pointer}
+  #screen-customize .chips button.on{background:var(--accent);color:#0b0c0e;border-color:transparent}
+  #screen-customize .gobar{position:sticky;bottom:0;padding:13px 16px;background:#0e1014;border-top:1px solid var(--line)}
+  #screen-customize .go{width:100%;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:18px;border:none;border-radius:13px;padding:16px;background:var(--accent);color:#0b0c0e;cursor:pointer}
+
   /* Settings overlay */
   .sheet{position:fixed;inset:0;background:rgba(6,7,9,.72);backdrop-filter:blur(4px);z-index:40;display:none;justify-content:center;align-items:flex-start;overflow-y:auto;padding:14px}
   .sheet.open{display:flex}

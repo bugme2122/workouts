@@ -82,8 +82,8 @@ function accentVar(p,rot){ if(finished) return "var(--work)"; if(p.type==="prep"
 
 function renderDots(){ let h=""; for(let i=0;i<LADN;i++) h+="<i></i>"; elDots.innerHTML=h; }
 function setupView(){
-  elPair.classList.toggle("solo", config.mode==="solo");
-  elWhoA.textContent = config.mode==="solo" ? "Current" : "Partner A";
+  elPair.classList.toggle("solo", config.people===1);
+  elWhoA.textContent = config.people===1 ? "Current" : "Partner A";
   elLad.textContent = config.ladder.map(x=>x[0]).join("·")+"s";
   renderDots();
 }
@@ -109,7 +109,7 @@ function render(){
   for(let i=0;i<dots.length;i++){ dots[i].className=""; if(p.type==="prep"||finished) continue; if(i<p.iv) dots[i].className="done"; else if(i===p.iv) dots[i].className="on"; }
 
   elRot.classList.toggle("show", rot);
-  cardA.classList.toggle("rotate-flash", rot); cardB.classList.toggle("rotate-flash", rot && config.mode==="duo");
+  cardA.classList.toggle("rotate-flash", rot); cardB.classList.toggle("rotate-flash", rot && config.people>1);
 
   const A=config.stations[disp % N];
   const B=config.stations[(disp+OFFSET)%N];
@@ -128,7 +128,7 @@ function render(){
 }
 
 function enterPhase(p,firstWorkOfBlock){
-  if(p.type==="work"){ sWork(); buzz([50,40,80]); say( (config.mode==="solo"&&firstWorkOfBlock) ? config.stations[p.block].ex : "Work" ); }
+  if(p.type==="work"){ sWork(); buzz([50,40,80]); say( (config.people===1&&firstWorkOfBlock) ? config.stations[p.block].ex : "Work" ); }
   else if(p.type==="rest"){ const rot=(p.iv===LADN-1&&p.block<TOTBLOCKS-1); if(rot){ sRotate(); buzz([80,50,80,50,160]); say("Rotate. Switch stations."); } else { sRest(); buzz([120]); say("Rest"); } }
 }
 
@@ -160,14 +160,12 @@ btnReset.addEventListener("click",reset);
 elTcard.addEventListener("click",start);
 
 // ================= SETTINGS =================
-const sheet=$("sheet"); let draft=null;
+const sheet=$("sheet"); let draft=null; let sheetFromCustomize=false;
 
-function openSettings(){ if(running) start(); draft=clone(config); fillSettings(); sheet.classList.add("open"); }
+function openSettings(){ if(running) start(); sheetFromCustomize=false; draft=clone(config); fillSettings(); sheet.classList.add("open"); }
 function closeSettings(){ sheet.classList.remove("open"); }
 
 function fillSettings(){
-  $("modeDuo").classList.toggle("sel",draft.mode==="duo");
-  $("modeSolo").classList.toggle("sel",draft.mode==="solo");
   $("prepInput").value=draft.prep;
   $("volInput").value=Math.round(draft.volume*100);
   document.querySelectorAll(".sw-toggle").forEach(t=>{ t.classList.toggle("on", !!draft[t.dataset.tog]); });
@@ -251,9 +249,7 @@ function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,
 
 // settings events
 $("gear").onclick=openSettings;
-$("closeS").onclick=()=>{ applyTheme(config.theme); closeSettings(); };
-$("modeDuo").onclick=()=>{ draft.mode="duo"; fillSettings(); };
-$("modeSolo").onclick=()=>{ draft.mode="solo"; fillSettings(); };
+$("closeS").onclick=()=>{ if(sheetFromCustomize){ closeSettings(); applyTheme(draft.theme); } else { applyTheme(config.theme); closeSettings(); } };
 $("addStation").onclick=()=>{ draft.stations.push({ex:"New exercise",gear:"",rep:""}); renderStationRows(); };
 $("addInterval").onclick=()=>{ const lastp=draft.ladder[draft.ladder.length-1]||[30,15]; draft.ladder.push([lastp[0],lastp[1]]); renderLadderRows(); };
 $("prepInput").oninput=e=>draft.prep=parseInt(e.target.value)||0;
@@ -265,7 +261,17 @@ $("copyLink").onclick=()=>{ const link=location.origin+location.pathname+"#c="+e
   const out=$("linkOut"); out.textContent=link; out.classList.add("show");
   try{ navigator.clipboard.writeText(link).then(()=>{ $("copyLink").textContent="✓ Link copied"; setTimeout(()=>{$("copyLink").innerHTML="&#128279; Copy shareable link";},1600); }); }catch(e){}
 };
-$("applyBtn").onclick=()=>{ config=sanitize(clone(draft)); applyTheme(config.theme); persist(); build(); setupView(); reset(); closeSettings(); };
+$("applyBtn").onclick=()=>{
+  if(sheetFromCustomize){
+    draft.people=clampPeople(draft.people, draft.stations.length);
+    draft.personNames=draft.personNames.slice(0, draft.people);
+    applyTheme(draft.theme);
+    closeSettings();
+    renderPeoplePicker(); renderNameList(); renderCustLen(); renderCustomizeSummaries();
+  } else {
+    config=sanitize(clone(draft)); applyTheme(config.theme); persist(); build(); setupView(); reset(); closeSettings();
+  }
+};
 
 // ================= SCREENS / CATALOG =================
 function showScreen(name) {
@@ -297,10 +303,70 @@ function estimateMinutes(cfg) {
   return Math.round(r.total / 60);
 }
 
-function openCustomize(w) { showScreen("customize"); }
-function startLive() { build(); setupView(); reset(); showScreen("live"); }
+// ================= CUSTOMIZE =================
+function openCustomize(workout) {
+  draft = sanitize(workout ? workoutToConfig(workout) : clone(DEFAULT));
+  applyTheme(draft.theme);
+  $("custTitle").textContent = workout ? workout.name : "Custom workout";
+  renderPeoplePicker(); renderNameList(); renderCustLen(); renderCustomizeSummaries();
+  showScreen("customize");
+}
 
-document.getElementById("buildOwn").onclick = () => openCustomize(null);
+function renderPeoplePicker() {
+  const row = $("peopleRow");
+  const maxP = Math.min(6, draft.stations.length);
+  row.innerHTML = "";
+  for (let n = 1; n <= 6; n++) {
+    const b = document.createElement("div");
+    b.className = "pp pp" + n + (n <= draft.people ? " on" : "") + (n > maxP ? " disabled" : "");
+    b.textContent = n;
+    if (n <= maxP) b.onclick = () => { draft.people = n; draft.personNames = draft.personNames.slice(0, n); renderPeoplePicker(); renderNameList(); };
+    row.appendChild(b);
+  }
+}
+
+function renderNameList() {
+  const list = $("nameList");
+  list.innerHTML = "";
+  for (let k = 0; k < draft.people; k++) {
+    const wrap = document.createElement("div");
+    wrap.className = "nrow";
+    wrap.innerHTML = '<span class="dot" style="background:var(--p' + (k + 1) + ')"></span>' +
+      '<input placeholder="Person ' + (k + 1) + ' name (optional)">';
+    const input = wrap.querySelector("input");
+    input.value = draft.personNames[k] || "";
+    input.oninput = () => { draft.personNames[k] = input.value; };
+    list.appendChild(wrap);
+  }
+}
+
+function renderCustLen() {
+  const c = $("custLenSeg");
+  c.innerHTML = "";
+  LENGTHS.forEach(L => {
+    const b = document.createElement("button");
+    b.textContent = L.label;
+    if (draft.targetMin === L.min) b.className = "on";
+    b.onclick = () => { draft.targetMin = L.min; renderCustLen(); };
+    c.appendChild(b);
+  });
+}
+
+function renderCustomizeSummaries() {
+  const n = draft.stations.length;
+  $("custStationCount").textContent = n + (n === 1 ? " station" : " stations");
+  $("custLadder").textContent = draft.ladder.map(x => x[0]).join("·") + "s";
+  const snd = [draft.voice ? "Voice" : null, draft.ticks ? "Beeps" : null, draft.haptics ? "Haptics" : null].filter(Boolean).join(" · ") || "Silent";
+  $("custThemeSound").textContent = draft.theme + " · " + snd;
+}
+
+function openCustomizeEditor() { sheetFromCustomize = true; fillSettings(); sheet.classList.add("open"); }
+
+$("goBtn").onclick = () => { config = sanitize(clone(draft)); persist(); startLive(); };
+$("custBack").onclick = () => showScreen("home");
+$("custEditStations").onclick = openCustomizeEditor;
+$("custEditTheme").onclick = openCustomizeEditor;
+$("buildOwn").onclick = () => openCustomize(null);
 
 // ---------- init ----------
 applyTheme(config.theme);
@@ -308,3 +374,5 @@ renderCatalog();
 const hasShared = (location.hash || "").indexOf("c=") >= 0;
 showScreen(hasShared ? "live" : "home");
 if (hasShared) { build(); setupView(); reset(); }
+
+function startLive() { build(); setupView(); reset(); showScreen("live"); ensureAudio(); }

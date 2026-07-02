@@ -28,7 +28,45 @@
   </div>
 </section>
 
-<section id="screen-customize" class="screen"><!-- filled in Task 7 --></section>
+<section id="screen-customize" class="screen">
+  <div class="cz">
+    <div class="top">
+      <span id="custBack" class="back">&lsaquo; Catalog</span>
+      <span id="custTitle" class="ttl">Custom workout</span>
+    </div>
+    <div class="body">
+
+      <div>
+        <div class="lab">Who's working out?</div>
+        <div class="people" id="peopleRow"></div>
+        <div class="names" id="nameList"></div>
+        <div class="nhint">Leave blank to just use the color + &ldquo;P3&rdquo;. Names show on the live screen.</div>
+      </div>
+
+      <div>
+        <div class="lab">Length</div>
+        <div class="sec"><div class="chips" id="custLenSeg"></div></div>
+      </div>
+
+      <div>
+        <div class="lab">Stations &amp; ladder</div>
+        <div class="sec">
+          <div class="sechead"><span class="nm" id="custStationCount">6 stations</span><span class="v" id="custEditStations">Edit &rsaquo;</span></div>
+          <div class="sechead" style="margin-top:12px"><span class="nm">Ladder</span><span class="v" id="custLadder">60&middot;50&middot;40&middot;30&middot;20s</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="lab">Theme &amp; sound</div>
+        <div class="sec">
+          <div class="sechead"><span class="nm" id="custThemeSound">Volt &middot; Voice &middot; Beeps</span><span class="v" id="custEditTheme">Edit &rsaquo;</span></div>
+        </div>
+      </div>
+
+    </div>
+    <div class="gobar"><button class="go" id="goBtn">Go &#9656;</button></div>
+  </div>
+</section>
 
 <section id="screen-live" class="screen">
 <div class="wrap">
@@ -80,10 +118,6 @@
 <div class="sheet" id="sheet">
   <div class="sheetcard">
     <div class="shead"><h2>Settings</h2><button class="iconbtn" id="closeS">&times;</button></div>
-
-    <div class="sec"><div class="lab">Mode</div>
-      <div class="seg"><button id="modeDuo">2 People</button><button id="modeSolo">Solo</button></div>
-    </div>
 
     <div class="sec"><div class="lab">Workout length</div>
       <div class="chips" id="lenSeg"></div>
