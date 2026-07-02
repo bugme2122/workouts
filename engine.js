@@ -98,3 +98,21 @@ export function sanitize(c) {
   c.personNames = (c.personNames || []).slice(0, c.people);
   return c;
 }
+
+// Per-second audio-cue decision (pure). Returns which cue(s) fire at `secLeft`
+// whole seconds remaining in `phase`. app.js maps this to sound/speech.
+export function secondCue(phase, secLeft) {
+  const out = { speak: null, beep: false, chime: false };
+  if (!phase || secLeft < 1) return out;
+  const type = phase.type, dur = phase.dur || 0;
+  if (type === "prep") {
+    if (secLeft <= Math.min(3, dur - 1)) { out.speak = String(secLeft); out.beep = true; }
+    return out;
+  }
+  if (type === "work" || type === "rest") {
+    if (secLeft <= Math.min(5, dur - 1)) { out.speak = String(secLeft); out.beep = true; }
+    if (dur >= 12 && secLeft === Math.round(dur / 2)) out.chime = true;
+    return out;
+  }
+  return out;
+}

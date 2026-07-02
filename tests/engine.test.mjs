@@ -97,3 +97,36 @@ test("sanitize drops non-http(s) station urls", () => {
     ladder: [[20, 10]], stations: [{ ex: "X", url: "javascript:alert(1)" }] });
   assert.equal(c.stations[0].url, "");
 });
+
+import { secondCue } from "../engine.js";
+
+test("secondCue: prep speaks only the last 3 seconds, with beep", () => {
+  assert.deepEqual(secondCue({ type: "prep", dur: 5 }, 3), { speak: "3", beep: true, chime: false });
+  assert.deepEqual(secondCue({ type: "prep", dur: 5 }, 1), { speak: "1", beep: true, chime: false });
+  assert.deepEqual(secondCue({ type: "prep", dur: 5 }, 4), { speak: null, beep: false, chime: false });
+  assert.deepEqual(secondCue({ type: "prep", dur: 5 }, 5), { speak: null, beep: false, chime: false });
+});
+
+test("secondCue: work/rest speak the last 5 seconds, with beep", () => {
+  assert.deepEqual(secondCue({ type: "work", dur: 60 }, 5), { speak: "5", beep: true, chime: false });
+  assert.deepEqual(secondCue({ type: "rest", dur: 60 }, 1), { speak: "1", beep: true, chime: false });
+  assert.deepEqual(secondCue({ type: "work", dur: 60 }, 6), { speak: null, beep: false, chime: false });
+});
+
+test("secondCue: chimes at the halfway second only when dur >= 12", () => {
+  assert.equal(secondCue({ type: "work", dur: 60 }, 30).chime, true);
+  assert.equal(secondCue({ type: "work", dur: 12 }, 6).chime, true);
+  assert.equal(secondCue({ type: "work", dur: 11 }, 6).chime, false); // guard boundary
+  assert.equal(secondCue({ type: "rest", dur: 10 }, 5).chime, false);  // short rest: no chime
+});
+
+test("secondCue: never speaks and chimes in the same second", () => {
+  assert.deepEqual(secondCue({ type: "work", dur: 12 }, 6), { speak: null, beep: false, chime: true });
+  assert.deepEqual(secondCue({ type: "work", dur: 12 }, 5), { speak: "5", beep: true, chime: false });
+});
+
+test("secondCue: a 1s interval is silent at every second", () => {
+  for (let s = 0; s <= 1; s++) {
+    assert.deepEqual(secondCue({ type: "work", dur: 1 }, s), { speak: null, beep: false, chime: false });
+  }
+});
