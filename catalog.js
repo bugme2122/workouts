@@ -50,7 +50,7 @@ export const DEFAULT = {
     {ex:"Push-ups",    gear:"Bodyweight", rep:"12–15 reps", url:YT("push up proper form")},
   ],
   personNames: [],
-  theme: "Volt", voice: false, ticks: true, haptics: false, keepAwake: true, volume: 0.8,
+  theme: "Volt", voice: true, ticks: true, haptics: false, keepAwake: true, volume: 0.8, halfChime: true,
   targetMin: 0, workoutId: "kb-ladder",
 };
 

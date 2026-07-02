@@ -63,7 +63,7 @@ export function occupants(block, P, N) {
 
 // DEFAULT_CONFIG is injected by the caller (app.js) via setDefaults(); tests pass a
 // literal. This keeps engine.js free of catalog data.
-let DEFAULTS = { people: 2, prep: 5, theme: "Volt", volume: 0.8, targetMin: 0 };
+let DEFAULTS = { people: 2, prep: 5, theme: "Volt", volume: 0.8, targetMin: 0, voice: true, ticks: true, halfChime: true };
 export function setDefaults(d) { DEFAULTS = { ...DEFAULTS, ...d }; }
 
 export function migrate(c) {

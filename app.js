@@ -3,10 +3,10 @@ import {
 } from "./catalog.js";
 import {
   blockLenOf, blocksFor, buildPhases, enc, dec, migrate, sanitize,
-  clampPeople, occupants, setDefaults,
+  clampPeople, occupants, setDefaults, secondCue,
 } from "./engine.js";
 
-setDefaults({ people: DEFAULT.people, prep: DEFAULT.prep, theme: DEFAULT.theme, volume: DEFAULT.volume, targetMin: DEFAULT.targetMin });
+setDefaults({ people: DEFAULT.people, prep: DEFAULT.prep, theme: DEFAULT.theme, volume: DEFAULT.volume, targetMin: DEFAULT.targetMin, voice: DEFAULT.voice, ticks: DEFAULT.ticks, halfChime: DEFAULT.halfChime });
 
 const $ = id => document.getElementById(id);
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -52,6 +52,7 @@ const sWork=()=>{tone(660,0,.12,.32);tone(990,.10,.20,.32);};
 const sRest=()=>{tone(420,0,.26,.26,"sine");};
 const sRotate=()=>{tone(523,0,.14,.30);tone(659,.14,.14,.30);tone(880,.28,.34,.34);};
 const sTick=()=>{ if(config.ticks) tone(1568,0,.05,.16,"sine"); };
+const sHalf=()=>{ tone(880,0,.12,.28,"sine"); tone(1174,.10,.14,.28,"sine"); };
 const sDone=()=>{[523,659,784,1047].forEach((f,i)=>tone(f,i*.13,.34,.30,"triangle"));};
 function say(t){ try{ if(!config.voice||config.volume<=0||!window.speechSynthesis) return; speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.volume=config.volume; u.rate=1.12; u.pitch=1; speechSynthesis.speak(u);}catch(e){} }
 function buzz(p){ try{ if(config.haptics&&navigator.vibrate) navigator.vibrate(p);}catch(e){} }
@@ -63,7 +64,7 @@ function releaseWake(){ try{ if(wake){ wake.release(); wake=null; } }catch(e){} 
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&running) acquireWake(); });
 
 // ---------- state ----------
-let idx=0, remaining=0, running=false, finished=false, last=0, beepSec=null, rafId=null;
+let idx=0, remaining=0, running=false, finished=false, last=0, cueSec=null, rafId=null;
 
 // ---------- elements ----------
 const elPhase=$("phase"),elNum=$("num"),elIv=$("ivlabel"),elTot=$("tot"),elProg=$("progbar"),
@@ -178,7 +179,8 @@ function render(){
 
 function enterPhase(p,firstWorkOfBlock){
   if(p.type==="work"){ sWork(); buzz([50,40,80]);
-    if(config.people===1&&firstWorkOfBlock){ const st=occupants(p.block,1,N)[0].station; say(config.stations[st].ex); }
+    if(p.block===0&&p.iv===0){ say("Go"); }
+    else if(config.people===1&&firstWorkOfBlock){ const st=occupants(p.block,1,N)[0].station; say(config.stations[st].ex); }
     else say("Work"); }
   else if(p.type==="rest"){ const rot=(p.iv===LADN-1&&p.block<TOTBLOCKS-1); if(rot){ sRotate(); buzz([80,50,80,50,160]); say("Rotate. Switch stations."); } else { sRest(); buzz([120]); say("Rest"); } }
 }
@@ -187,12 +189,18 @@ function loop(){
   if(!running) return;
   const now=performance.now(); remaining-=(now-last); last=now;
   const p=phases[idx]; const secLeft=Math.ceil(remaining/1000);
-  if((p.type==="work"||p.type==="rest"||p.type==="prep")&&secLeft<=3&&secLeft>=1&&secLeft!==beepSec){ beepSec=secLeft; sTick(); }
+  if(secLeft>=1&&secLeft!==cueSec){
+    cueSec=secLeft;
+    const cue=secondCue(p, secLeft);
+    if(cue.beep) sTick();
+    if(cue.speak) say(cue.speak);
+    if(cue.chime && config.halfChime) sHalf();
+  }
   while(remaining<=0){
     const leftover=remaining; idx++;
     if(idx>=phases.length){ finished=true; running=false; idx=phases.length-1; releaseWake(); sDone(); say("Workout complete"); remaining=0; render(); showComplete(); return; }
     const np=phases[idx]; enterPhase(np, np.type==="work"&&np.iv===0);
-    remaining=np.dur*1000+leftover; beepSec=null;
+    remaining=np.dur*1000+leftover; cueSec=null;
   }
   render(); rafId=requestAnimationFrame(loop);
 }
@@ -200,11 +208,11 @@ function start(){
   ensureAudio();
   if(finished) reset();
   if(running){ running=false; if(rafId) cancelAnimationFrame(rafId); releaseWake(); render(); return; }
-  running=true; last=performance.now(); beepSec=null; acquireWake();
+  running=true; last=performance.now(); cueSec=null; acquireWake();
   if(idx===0 && phases[0].type==="prep") say("Get ready");
   render(); rafId=requestAnimationFrame(loop);
 }
-function reset(){ running=false; finished=false; if(rafId) cancelAnimationFrame(rafId); releaseWake(); idx=0; remaining=phases[0].dur*1000; beepSec=null; render();
+function reset(){ running=false; finished=false; if(rafId) cancelAnimationFrame(rafId); releaseWake(); idx=0; remaining=phases[0].dur*1000; cueSec=null; render();
   $("doneCard").hidden = true; elTcard.style.display = ""; }
 
 function showComplete() {
