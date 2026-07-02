@@ -267,5 +267,44 @@ $("copyLink").onclick=()=>{ const link=location.origin+location.pathname+"#c="+e
 };
 $("applyBtn").onclick=()=>{ config=sanitize(clone(draft)); applyTheme(config.theme); persist(); build(); setupView(); reset(); closeSettings(); };
 
+// ================= SCREENS / CATALOG =================
+function showScreen(name) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById("screen-" + name).classList.add("active");
+}
+
+function renderCatalog() {
+  const stack = document.getElementById("catalogStack");
+  stack.innerHTML = "";
+  WORKOUTS.forEach(w => {
+    const card = document.createElement("div");
+    card.className = "wcard";
+    const mins = estimateMinutes(workoutToConfig(w));
+    card.innerHTML =
+      '<div class="wtop"><div><div class="wname">' + esc(w.name) + '</div>' +
+      '<div class="wtag">' + esc(w.category) + '</div></div>' +
+      '<div class="wdur">~' + mins + ' min</div></div>' +
+      '<div class="exmini">' + w.stations.map(s => '<span>' + esc(s.ex) + '</span>').join("") + '</div>' +
+      '<div class="wfoot"><button class="cust">Customize</button><button class="go">Start ▸</button></div>';
+    card.querySelector(".cust").onclick = () => openCustomize(w);
+    card.querySelector(".go").onclick = () => { config = sanitize(workoutToConfig(w)); startLive(); };
+    stack.appendChild(card);
+  });
+}
+
+function estimateMinutes(cfg) {
+  const r = buildPhases(cfg);
+  return Math.round(r.total / 60);
+}
+
+function openCustomize(w) { showScreen("customize"); }
+function startLive() { build(); setupView(); reset(); showScreen("live"); }
+
+document.getElementById("buildOwn").onclick = () => openCustomize(null);
+
 // ---------- init ----------
-applyTheme(config.theme); build(); setupView(); reset();
+applyTheme(config.theme);
+renderCatalog();
+const hasShared = (location.hash || "").indexOf("c=") >= 0;
+showScreen(hasShared ? "live" : "home");
+if (hasShared) { build(); setupView(); reset(); }

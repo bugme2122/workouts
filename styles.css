@@ -44,6 +44,8 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   html,body{height:100%}
+  .screen{display:none}
+  .screen.active{display:block}
   body{
     background:radial-gradient(120% 80% at 50% -10%, #181b21 0%, var(--bg) 55%), var(--bg);
     color:var(--ink);font-family:'Barlow',sans-serif;display:flex;justify-content:center;
@@ -120,6 +122,31 @@
   .legend{display:flex;justify-content:space-between;gap:6px;font-family:'Barlow Condensed',sans-serif;font-weight:600;
     font-size:12px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase;border-top:1px solid var(--line);padding-top:11px;text-align:center}
   .legend span b{color:var(--ink);font-weight:700;display:block;font-size:13px}
+
+  /* ---- Home (catalog) screen ---- */
+  .home{background:linear-gradient(180deg,#16181d,#0e1014);border:1px solid var(--line);border-radius:20px;
+    color:var(--ink);width:100%;max-width:480px;margin:0 auto;padding:18px 16px 20px;
+    display:flex;flex-direction:column;gap:16px}
+  .home .brand{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:13px;color:var(--dim)}
+  .home .brand b{color:var(--ink)}
+  .home .lab{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--dim);margin-bottom:-7px}
+  .stack{display:flex;flex-direction:column;gap:11px}
+  .wcard{background:linear-gradient(180deg,#16181d,#0e1014);border:1px solid var(--line);border-radius:15px;padding:13px;position:relative;
+    box-shadow:0 12px 26px -20px #000}
+  .wtop{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .wname{font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;font-size:19px;line-height:1}
+  .wtag{font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:10px;color:var(--dim);margin-top:4px}
+  .wdur{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;color:#0b0c0e;background:var(--accent);border-radius:999px;padding:4px 9px;white-space:nowrap}
+  .exmini{display:flex;flex-wrap:wrap;gap:5px;margin-top:11px}
+  .exmini span{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.02em;
+    color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:3px 7px}
+  .exmini .more{color:var(--dim);background:transparent;border-color:transparent}
+  .wfoot{display:flex;gap:8px;margin-top:12px}
+  .wfoot button{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:13px;border-radius:10px;padding:10px;cursor:pointer;border:none}
+  .wfoot .cust{flex:1;background:transparent;border:1px solid var(--line);color:var(--dim)}
+  .wfoot .go{flex:1.2;background:var(--accent);color:#0b0c0e}
+  .browse{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:13px;
+    background:transparent;border:1px dashed var(--line);color:var(--dim);border-radius:11px;padding:12px;cursor:pointer;width:100%}
 
   /* Settings overlay */
   .sheet{position:fixed;inset:0;background:rgba(6,7,9,.72);backdrop-filter:blur(4px);z-index:40;display:none;justify-content:center;align-items:flex-start;overflow-y:auto;padding:14px}
