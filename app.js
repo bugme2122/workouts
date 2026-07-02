@@ -1,9 +1,9 @@
 import {
-  THEMES, LADDERS, LENGTHS, EXERCISES, DEFAULT, WORKOUTS, YT, howto, workoutToConfig,
+  THEMES, LADDERS, LENGTHS, EXERCISES, DEFAULT, WORKOUTS, howto, workoutToConfig,
 } from "./catalog.js";
 import {
   blockLenOf, blocksFor, buildPhases, enc, dec, migrate, sanitize,
-  offsetFor, clampPeople, occupants, setDefaults,
+  clampPeople, occupants, setDefaults,
 } from "./engine.js";
 
 setDefaults({ people: DEFAULT.people, prep: DEFAULT.prep, theme: DEFAULT.theme, volume: DEFAULT.volume, targetMin: DEFAULT.targetMin });
