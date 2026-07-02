@@ -3,7 +3,7 @@ import {
   encShare, decShare,
 } from "./catalog.js";
 import {
-  blockLenOf, blocksFor, buildPhases, enc, dec, migrate, sanitize,
+  blockLenOf, blocksFor, buildPhases, migrate, sanitize,
   clampPeople, occupants, setDefaults, secondCue,
 } from "./engine.js";
 
