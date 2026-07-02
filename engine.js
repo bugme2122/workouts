@@ -44,3 +44,57 @@ export function dec(s) {
     return JSON.parse(decodeURIComponent(escape(atob(s))));
   } catch (e) { return null; }
 }
+
+export function offsetFor(k, P, N) {
+  return Math.round(k * N / (P || 1));
+}
+
+export function clampPeople(people, N) {
+  return Math.max(1, Math.min(people || 1, Math.min(6, N)));
+}
+
+export function occupants(block, P, N) {
+  const out = [];
+  for (let k = 0; k < P; k++) {
+    out.push({ person: k, station: ((block + offsetFor(k, P, N)) % N + N) % N });
+  }
+  return out;
+}
+
+// DEFAULT_CONFIG is injected by the caller (app.js) via setDefaults(); tests pass a
+// literal. This keeps engine.js free of catalog data.
+let DEFAULTS = { people: 2, prep: 5, theme: "Volt", volume: 0.8, targetMin: 0 };
+export function setDefaults(d) { DEFAULTS = { ...DEFAULTS, ...d }; }
+
+export function migrate(c) {
+  const src = c || {};
+  const out = { ...DEFAULTS, ...src };
+  if (out.mode !== undefined) {
+    if (src.people === undefined) out.people = out.mode === "solo" ? 1 : 2;
+    delete out.mode;
+  }
+  if (out.people === undefined) out.people = 2;
+  if (!Array.isArray(out.personNames)) out.personNames = [];
+  return out;
+}
+
+export function sanitize(c) {
+  c.stations = (c.stations || []).map(s => ({
+    ex: (s.ex || "").trim() || "Exercise",
+    gear: (s.gear || "").trim(),
+    rep: (s.rep || "").trim(),
+    url: s.url || "",
+  }));
+  if (!c.stations.length) c.stations = [{ ex: "Exercise", gear: "", rep: "" }];
+  c.ladder = (c.ladder || []).map(p => [
+    Math.max(1, parseInt(p[0]) || 1),
+    Math.max(0, parseInt(p[1]) || 0),
+  ]);
+  if (!c.ladder.length) c.ladder = [[30, 15]];
+  c.prep = Math.max(0, Math.min(60, parseInt(c.prep) || 0));
+  c.targetMin = Math.max(0, Math.min(180, parseInt(c.targetMin) || 0));
+  c.volume = Math.max(0, Math.min(1, c.volume));
+  c.people = clampPeople(c.people, c.stations.length);
+  c.personNames = (c.personNames || []).slice(0, c.people);
+  return c;
+}

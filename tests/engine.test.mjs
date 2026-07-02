@@ -39,3 +39,41 @@ test("enc/dec round-trips a config", () => {
   const round = dec(enc(base));
   assert.deepEqual(round.ladder, base.ladder);
 });
+
+import { offsetFor, clampPeople, occupants, migrate, sanitize } from "../engine.js";
+
+test("offsetFor for 2 people equals legacy floor(N/2)", () => {
+  assert.equal(offsetFor(1, 2, 6), 3); // matches old OFFSET = floor(6/2)
+  assert.equal(offsetFor(0, 2, 6), 0);
+});
+
+test("occupants spreads P people around N stations, wrapping", () => {
+  // block 0, 3 people, 6 stations => stations 0,2,4
+  assert.deepEqual(occupants(0, 3, 6).map(o => o.station), [0, 2, 4]);
+  // block 5 wraps: 5,7%6=1,9%6=3
+  assert.deepEqual(occupants(5, 3, 6).map(o => o.station), [5, 1, 3]);
+});
+
+test("clampPeople never exceeds stations or 6, never below 1", () => {
+  assert.equal(clampPeople(6, 4), 4); // 6 people, 4 stations => 4
+  assert.equal(clampPeople(9, 8), 6); // cap at 6
+  assert.equal(clampPeople(0, 6), 1); // floor at 1
+});
+
+test("migrate maps legacy mode to people and drops mode", () => {
+  const solo = migrate({ mode: "solo", stations: [{ ex: "A" }], ladder: [[20, 10]] });
+  assert.equal(solo.people, 1);
+  assert.equal(solo.mode, undefined);
+  const duo = migrate({ mode: "duo", stations: [{ ex: "A" }], ladder: [[20, 10]] });
+  assert.equal(duo.people, 2);
+});
+
+test("sanitize clamps people to station count and trims names", () => {
+  const c = sanitize({
+    people: 6, personNames: ["Ana", "Ben", "Cam", "Dev"],
+    stations: [{ ex: "A" }, { ex: "B" }, { ex: "C" }], ladder: [[20, 10]],
+    prep: 5, targetMin: 0, volume: 0.8, theme: "Volt",
+  });
+  assert.equal(c.people, 3);            // capped to 3 stations
+  assert.equal(c.personNames.length, 3); // trimmed to people
+});
