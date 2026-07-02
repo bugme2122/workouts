@@ -52,7 +52,6 @@ const sWork=()=>{tone(660,0,.12,.32);tone(990,.10,.20,.32);};
 const sRest=()=>{tone(420,0,.26,.26,"sine");};
 const sRotate=()=>{tone(523,0,.14,.30);tone(659,.14,.14,.30);tone(880,.28,.34,.34);};
 const sTick=()=>{ if(config.ticks) tone(1568,0,.05,.16,"sine"); };
-const sHalf=()=>{ tone(880,0,.12,.28,"sine"); tone(1174,.10,.14,.28,"sine"); };
 const sDone=()=>{[523,659,784,1047].forEach((f,i)=>tone(f,i*.13,.34,.30,"triangle"));};
 function say(t){ try{ if(!config.voice||config.volume<=0||!window.speechSynthesis) return; speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.volume=config.volume; u.rate=1.12; u.pitch=1; speechSynthesis.speak(u);}catch(e){} }
 function buzz(p){ try{ if(config.haptics&&navigator.vibrate) navigator.vibrate(p);}catch(e){} }
@@ -194,7 +193,7 @@ function loop(){
     const cue=secondCue(p, secLeft);
     if(cue.beep) sTick();
     if(cue.speak) say(cue.speak);
-    if(cue.chime && config.halfChime) sHalf();
+    if(cue.chime && config.halfChime) say("Halfway");
   }
   while(remaining<=0){
     const leftover=remaining; idx++;
@@ -432,7 +431,7 @@ function renderCustomizeSummaries() {
   const n = draft.stations.length;
   $("custStationCount").textContent = n + (n === 1 ? " station" : " stations");
   $("custLadder").textContent = draft.ladder.map(x => x[0]).join("·") + "s";
-  const snd = [draft.voice ? "Voice" : null, draft.ticks ? "Beeps" : null, draft.halfChime ? "Chime" : null, draft.haptics ? "Haptics" : null].filter(Boolean).join(" · ") || "Silent";
+  const snd = [draft.voice ? "Voice" : null, draft.ticks ? "Beeps" : null, draft.halfChime ? "Halfway" : null, draft.haptics ? "Haptics" : null].filter(Boolean).join(" · ") || "Silent";
   $("custThemeSound").textContent = draft.theme + " · " + snd;
 }
 
