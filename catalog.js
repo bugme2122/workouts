@@ -58,6 +58,7 @@ export const DEFAULT = {
   targetMin: 0, workoutId: "kb-ladder",
 };
 
+// NOTE: each workout `id` must be a URL-safe slug with no "~" (it is the #w=<id> share-link key; "~" delimits the settings tail).
 export const WORKOUTS = [
   {
     id: "kb-ladder", name: "Full-Body KB Ladder", category: "Strength · Descending 60→20s",

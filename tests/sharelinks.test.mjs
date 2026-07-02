@@ -64,3 +64,21 @@ test("decShare tolerates a leading # and an unknown id without throwing", () => 
   const back = decShare("w=does-not-exist");
   assert.ok(back && Array.isArray(back.stations) && back.stations.length >= 1);
 });
+
+test("encShare/decShare round-trips every light field at once", () => {
+  const kb = WORKOUTS.find(w => w.id === "kb-ladder");
+  const cfg = sanitize(workoutToConfig(kb));
+  Object.assign(cfg, {
+    people: 5, personNames: ["Ана", "Ben", "Cam", "Dev", "Eli"],
+    targetMin: 45, theme: "Ember", prep: 8, volume: 0.5,
+    voice: false, ticks: false, haptics: true, keepAwake: false, halfChime: false,
+  });
+  const hash = encShare(cfg);
+  assert.ok(hash.startsWith("w=kb-ladder~"), "expected short w= form, got " + hash);
+  const back = decShare(hash);
+  for (const f of ["people", "targetMin", "theme", "prep", "volume", "voice", "ticks", "haptics", "keepAwake", "halfChime"]) {
+    assert.deepEqual(back[f], cfg[f], "field " + f + " did not round-trip");
+  }
+  assert.deepEqual(back.personNames, cfg.personNames);
+  assert.deepEqual(back.stations, cfg.stations); // circuit from catalog baseline
+});
