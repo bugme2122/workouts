@@ -30,6 +30,8 @@ function getPresets(){ return store.local.loadPresets(); }
 function setPresets(o){ store.local.savePresets(o); cloudSavePresets(o); }
 
 let cloud=null, authUser=null, _cfgSaveT=null;
+let _authInited=false;
+let activeScreen="";
 function cloudSaveConfig(c){
   if(!cloud) return;
   clearTimeout(_cfgSaveT);
@@ -38,7 +40,10 @@ function cloudSaveConfig(c){
 function cloudSavePresets(o){ if(cloud) cloud.savePresets(o).catch(()=>{}); }
 
 async function connectAuth(){
-  try{ await auth.initAuth(onAuthChange); }catch(e){ /* offline / blocked: stay guest */ }
+  if(_authInited) return;
+  _authInited=true;
+  try{ await auth.initAuth(onAuthChange); }
+  catch(e){ _authInited=false; }
 }
 async function onAuthChange(u){
   authUser=u;
@@ -49,16 +54,22 @@ async function onAuthChange(u){
       cloud = cloudBackend(u.uid);
       let cloudCfg=null; try{ cloudCfg=await cloud.loadConfig(); }catch(e){}
       const dec = store.decideMigration(store.local.loadConfig(), cloudCfg);
-      if(dec.action==="use-cloud"){ config=sanitize(migrate(dec.config)); store.local.saveConfig(config); }
-      else if(dec.action==="upload-local"){ config=sanitize(migrate(dec.config)); try{ await cloud.saveConfig(config); }catch(e){} }
+      const idle = !bootedFromShare && !running && (activeScreen==="home" || activeScreen==="welcome");
+      if(dec.action==="use-cloud"){
+        const cfg=sanitize(migrate(dec.config));
+        store.local.saveConfig(cfg);                 // always cache the cloud copy locally
+        if(idle){ config=cfg; applyTheme(config.theme); build(); setupView(); reset(); }
+      } else if(dec.action==="upload-local"){
+        const cfg=sanitize(migrate(dec.config));
+        try{ await cloud.saveConfig(cfg); }catch(e){}
+        if(idle){ config=cfg; applyTheme(config.theme); build(); setupView(); reset(); }
+      }
       // presets: cloud-wins, else upload local
       try{
         const cp=await cloud.loadPresets();
         if(cp && Object.keys(cp).length){ store.local.savePresets(cp); }
         else { const lp=store.local.loadPresets(); if(Object.keys(lp).length) await cloud.savePresets(lp); }
       }catch(e){}
-      // Re-render only if not currently in a share-link/live session that must be preserved.
-      if(!bootedFromShare){ applyTheme(config.theme); build(); setupView(); reset(); }
     }catch(e){ /* keep local config on any cloud error */ }
   } else {
     clearTimeout(_cfgSaveT); cloud=null; store.setWantsAuth(false);
@@ -390,6 +401,7 @@ $("applyBtn").onclick=()=>{
 
 // ================= SCREENS / CATALOG =================
 function showScreen(name) {
+  activeScreen = name;
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + name).classList.add("active");
 }
@@ -517,6 +529,7 @@ function updateAccountUI(u){
     document.getElementById("acctSignOut").onclick = async () => { try{ await auth.signOutUser(); }catch(e){} };
     document.getElementById("acctDelete").onclick = async () => {
       if(!confirm("Delete your synced workout and presets from the cloud? Your device keeps its local copy.")) return;
+      clearTimeout(_cfgSaveT);
       try{ if(cloud) await cloud.deleteAll(); }catch(e){}
       try{ await auth.signOutUser(); }catch(e){}
     };
