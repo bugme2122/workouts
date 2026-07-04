@@ -33,7 +33,7 @@ let cloud=null, authUser=null, _cfgSaveT=null;
 function cloudSaveConfig(c){
   if(!cloud) return;
   clearTimeout(_cfgSaveT);
-  _cfgSaveT=setTimeout(()=>{ cloud.saveConfig(c).catch(()=>{}); }, 1200);
+  _cfgSaveT=setTimeout(()=>{ if(cloud) cloud.saveConfig(c).catch(()=>{}); }, 1200);
 }
 function cloudSavePresets(o){ if(cloud) cloud.savePresets(o).catch(()=>{}); }
 
@@ -61,7 +61,7 @@ async function onAuthChange(u){
       if(!bootedFromShare){ applyTheme(config.theme); build(); setupView(); reset(); }
     }catch(e){ /* keep local config on any cloud error */ }
   } else {
-    cloud=null; store.setWantsAuth(false);
+    clearTimeout(_cfgSaveT); cloud=null; store.setWantsAuth(false);
   }
   updateAccountUI(authUser);
 }
@@ -484,10 +484,49 @@ $("custEditTheme").onclick = openCustomizeEditor;
 $("buildOwn").onclick = () => openCustomize(null);
 
 // ---------- init ----------
+const bootedFromShare = /^#?[wc]=/.test(location.hash || "");
 applyTheme(config.theme);
 renderCatalog();
-const hasShared = /^#?[wc]=/.test(location.hash || "");
-showScreen(hasShared ? "live" : "home");
-if (hasShared) { build(); setupView(); reset(); }
+if (bootedFromShare) {
+  showScreen("live"); build(); setupView(); reset();
+} else if (store.hasEntered()) {
+  showScreen("home");
+} else {
+  showScreen("welcome");
+}
+if (store.wantsAuth()) connectAuth();   // returning signed-in user: reconnect + cloud-load (async)
+
+document.getElementById("guestBtn").onclick = () => { store.setEntered(); showScreen("home"); };
+document.getElementById("signInBtn").onclick = async () => {
+  store.setEntered();
+  try { await connectAuth(); await auth.signInWithGoogle(); showScreen("home"); }
+  catch (e) { showScreen("home"); }   // popup closed/blocked → continue as guest
+};
 
 function startLive() { build(); setupView(); reset(); showScreen("live"); ensureAudio(); }
+
+function updateAccountUI(u){
+  const box = document.getElementById("accountInfo");
+  const wu = document.getElementById("welcomeUser");
+  if(!box) return;
+  if(u){
+    const name = u.displayName || u.email || "Signed in";
+    box.innerHTML = '<div class="who">'+esc(name)+'</div>'+
+      '<button id="acctSignOut">Sign out</button>'+
+      '<button id="acctDelete" class="danger">Delete my cloud data</button>';
+    document.getElementById("acctSignOut").onclick = async () => { try{ await auth.signOutUser(); }catch(e){} };
+    document.getElementById("acctDelete").onclick = async () => {
+      if(!confirm("Delete your synced workout and presets from the cloud? Your device keeps its local copy.")) return;
+      try{ if(cloud) await cloud.deleteAll(); }catch(e){}
+      try{ await auth.signOutUser(); }catch(e){}
+    };
+    if(wu){ wu.hidden=false; wu.textContent="Signed in as "+name; }
+  } else {
+    box.innerHTML = '<div>Not signed in &mdash; using this device only.</div>'+
+      '<button id="acctSignIn">Sign in with Google to sync</button>';
+    const b=document.getElementById("acctSignIn");
+    if(b) b.onclick = async () => { try{ await connectAuth(); await auth.signInWithGoogle(); }catch(e){} };
+    if(wu){ wu.hidden=true; }
+  }
+}
+updateAccountUI(null);   // initial (signed-out) render

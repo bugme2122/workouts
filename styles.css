@@ -156,6 +156,16 @@
      workout theme; Customize still previews the selected workout's theme. */
   :root{ --brand:#c6f24e; }
   #screen-home{ --accent: var(--brand); }
+.welcome{ width:100%; max-width:480px; margin:0 auto; min-height:70vh; display:flex; flex-direction:column; justify-content:center; gap:14px; text-align:center; padding:24px 14px; }
+.welcome .brand{ font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:22px; color:var(--dim); }
+.welcome .brand b{ color:var(--ink); }
+.welcome .wtagline{ font-family:'Barlow',sans-serif; color:var(--dim); font-size:14px; margin-bottom:6px; }
+.welcome .welcomeUser{ font-family:'Barlow Condensed',sans-serif; font-weight:700; color:var(--ink); font-size:16px; }
+#screen-welcome{ --accent: var(--brand); }
+.accountInfo{ display:flex; flex-direction:column; gap:9px; font-family:'Barlow',sans-serif; font-size:13px; color:var(--dim); }
+.accountInfo .who{ color:var(--ink); font-weight:600; }
+.accountInfo button{ font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.08em; text-transform:uppercase; font-size:13px; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer; }
+.accountInfo button.danger{ color:#ff6b6b; border-color:#5a2a2a; }
   #screen-customize{ --accent: var(--work); }
   #screen-customize .cz{width:100%;max-width:380px;margin:0 auto;
     background:radial-gradient(120% 80% at 50% -10%,#181b21,#0b0c0e 55%);

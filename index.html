@@ -19,6 +19,16 @@
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+<section id="screen-welcome" class="screen">
+  <div class="welcome">
+    <div class="brand"><b>Ladder</b> Circuit</div>
+    <div class="wtagline">Color-coded interval circuits for 1&ndash;6 people.</div>
+    <div id="welcomeUser" class="welcomeUser" hidden></div>
+    <button class="main" id="signInBtn">Sign in with Google</button>
+    <button class="ghost" id="guestBtn">Continue as guest</button>
+    <div class="hint" id="welcomeHint">Guest mode keeps everything on this device. Sign in to sync across devices.</div>
+  </div>
+</section>
 <section id="screen-home" class="screen">
   <div class="home">
     <div class="brand"><b>Ladder</b> Circuit</div>
@@ -161,6 +171,9 @@
       </div>
     </div>
 
+    <div class="sec"><div class="lab">Account</div>
+      <div id="accountInfo" class="accountInfo"></div>
+    </div>
     <div class="sec"><div class="lab">Presets</div>
       <div class="presetrow" style="background:transparent;border:none;padding:0">
         <input class="fld" id="presetName" placeholder="Name this workout">
