@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "start": "python -m http.server 8000",
     "test": "node --test"
   }
 }
