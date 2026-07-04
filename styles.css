@@ -152,8 +152,11 @@
     background:transparent;border:1px dashed var(--line);color:var(--dim);border-radius:11px;padding:12px;cursor:pointer;width:100%}
 
   /* ---- Customize screen (ported from the customize.html mock) ---- */
-  /* Home + Customize use the lime WORK color as their accent (Go / Start). */
-  #screen-home, #screen-customize{ --accent: var(--work); }
+  /* Home is pinned to a fixed brand accent so it never drifts with the active
+     workout theme; Customize still previews the selected workout's theme. */
+  :root{ --brand:#c6f24e; }
+  #screen-home{ --accent: var(--brand); }
+  #screen-customize{ --accent: var(--work); }
   #screen-customize .cz{width:100%;max-width:380px;margin:0 auto;
     background:radial-gradient(120% 80% at 50% -10%,#181b21,#0b0c0e 55%);
     border:1px solid var(--line);border-radius:20px;color:var(--ink);overflow:hidden}
