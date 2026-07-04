@@ -7,6 +7,7 @@ import {
   clampPeople, occupants, setDefaults, secondCue,
 } from "./engine.js";
 import * as store from "./store.js";
+import * as auth from "./auth.js";
 
 setDefaults({ people: DEFAULT.people, prep: DEFAULT.prep, theme: DEFAULT.theme, volume: DEFAULT.volume, targetMin: DEFAULT.targetMin, voice: DEFAULT.voice, ticks: DEFAULT.ticks, halfChime: DEFAULT.halfChime });
 
@@ -28,9 +29,42 @@ function persist(){
 function getPresets(){ return store.local.loadPresets(); }
 function setPresets(o){ store.local.savePresets(o); cloudSavePresets(o); }
 
-let cloud=null;
-function cloudSaveConfig(c){ /* attached in Task 3 */ }
-function cloudSavePresets(o){ /* attached in Task 3 */ }
+let cloud=null, authUser=null, _cfgSaveT=null;
+function cloudSaveConfig(c){
+  if(!cloud) return;
+  clearTimeout(_cfgSaveT);
+  _cfgSaveT=setTimeout(()=>{ cloud.saveConfig(c).catch(()=>{}); }, 1200);
+}
+function cloudSavePresets(o){ if(cloud) cloud.savePresets(o).catch(()=>{}); }
+
+async function connectAuth(){
+  try{ await auth.initAuth(onAuthChange); }catch(e){ /* offline / blocked: stay guest */ }
+}
+async function onAuthChange(u){
+  authUser=u;
+  if(u){
+    store.setWantsAuth(true);
+    try{
+      const { cloudBackend } = await import("./firebase-backend.js");
+      cloud = cloudBackend(u.uid);
+      let cloudCfg=null; try{ cloudCfg=await cloud.loadConfig(); }catch(e){}
+      const dec = store.decideMigration(store.local.loadConfig(), cloudCfg);
+      if(dec.action==="use-cloud"){ config=sanitize(migrate(dec.config)); store.local.saveConfig(config); }
+      else if(dec.action==="upload-local"){ config=sanitize(migrate(dec.config)); try{ await cloud.saveConfig(config); }catch(e){} }
+      // presets: cloud-wins, else upload local
+      try{
+        const cp=await cloud.loadPresets();
+        if(cp && Object.keys(cp).length){ store.local.savePresets(cp); }
+        else { const lp=store.local.loadPresets(); if(Object.keys(lp).length) await cloud.savePresets(lp); }
+      }catch(e){}
+      // Re-render only if not currently in a share-link/live session that must be preserved.
+      if(!bootedFromShare){ applyTheme(config.theme); build(); setupView(); reset(); }
+    }catch(e){ /* keep local config on any cloud error */ }
+  } else {
+    cloud=null; store.setWantsAuth(false);
+  }
+  updateAccountUI(authUser);
+}
 
 let config = loadConfig();
 
