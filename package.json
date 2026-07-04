@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "python -m http.server 8000",
-    "test": "node --test"
+    "dev": "npx --yes live-server --port=8000",
+    "test": "node --test",
+    "test:watch": "node --test --watch"
   }
 }
