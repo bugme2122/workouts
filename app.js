@@ -6,6 +6,7 @@ import {
   blockLenOf, blocksFor, buildPhases, migrate, sanitize,
   clampPeople, occupants, setDefaults, secondCue,
 } from "./engine.js";
+import * as store from "./store.js";
 
 setDefaults({ people: DEFAULT.people, prep: DEFAULT.prep, theme: DEFAULT.theme, volume: DEFAULT.volume, targetMin: DEFAULT.targetMin, voice: DEFAULT.voice, ticks: DEFAULT.ticks, halfChime: DEFAULT.halfChime });
 
@@ -16,15 +17,20 @@ const clone = o => JSON.parse(JSON.stringify(o));
 function loadConfig(){
   const body=(location.hash||"").replace(/^#/,"");
   if(body.startsWith("w=")||body.startsWith("c=")){ const c=decShare(body); if(c) return sanitize(migrate(c)); }
-  try{ const s=localStorage.getItem("ladder.last"); if(s){ const c=JSON.parse(s); if(c) return sanitize(migrate(c)); } }catch(e){}
+  const c=store.local.loadConfig(); if(c) return sanitize(migrate(c));
   return sanitize(clone(DEFAULT));
 }
 function persist(){
-  try{ localStorage.setItem("ladder.last", JSON.stringify(config)); }catch(e){}
+  store.local.saveConfig(config);
   try{ history.replaceState(null,"","#"+encShare(config)); }catch(e){}
+  cloudSaveConfig(config);   // no-op until a cloud backend is attached (Task 3)
 }
-function getPresets(){ try{ return JSON.parse(localStorage.getItem("ladder.presets")||"{}"); }catch(e){ return {}; } }
-function setPresets(o){ try{ localStorage.setItem("ladder.presets", JSON.stringify(o)); }catch(e){} }
+function getPresets(){ return store.local.loadPresets(); }
+function setPresets(o){ store.local.savePresets(o); cloudSavePresets(o); }
+
+let cloud=null;
+function cloudSaveConfig(c){ /* attached in Task 3 */ }
+function cloudSavePresets(o){ /* attached in Task 3 */ }
 
 let config = loadConfig();
 
