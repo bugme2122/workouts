@@ -517,7 +517,20 @@ document.getElementById("signInBtn").onclick = async () => {
 
 function startLive() { build(); setupView(); reset(); showScreen("live"); ensureAudio(); }
 
+function updateIdChips(u){
+  const chips = document.querySelectorAll(".idchip");
+  if(u){
+    const first = ((u.displayName || u.email || "Account").trim().split(/\s+/)[0]) || "Account";
+    const av = u.photoURL
+      ? '<img src="'+esc(u.photoURL)+'" alt="" referrerpolicy="no-referrer">'
+      : '<span class="av">'+esc((first[0]||"?").toUpperCase())+'</span>';
+    chips.forEach(c=>{ c.innerHTML = av+'<span class="nm">'+esc(first)+'</span>'; c.hidden=false; c.onclick=openSettings; });
+  } else {
+    chips.forEach(c=>{ c.hidden=true; c.onclick=null; });
+  }
+}
 function updateAccountUI(u){
+  updateIdChips(u);
   const box = document.getElementById("accountInfo");
   const wu = document.getElementById("welcomeUser");
   if(!box) return;
