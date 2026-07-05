@@ -532,10 +532,40 @@ function updateIdChips(u){
     const av = u.photoURL
       ? '<img src="'+esc(u.photoURL)+'" alt="" referrerpolicy="no-referrer">'
       : '<span class="av">'+esc((first[0]||"?").toUpperCase())+'</span>';
-    chips.forEach(c=>{ c.innerHTML = av+'<span class="nm">'+esc(first)+'</span>'; c.hidden=false; c.onclick=openSettings; });
+    chips.forEach(c=>{ c.innerHTML = av+'<span class="nm">'+esc(first)+'</span>'; c.hidden=false; c.onclick=openAcctMenu; });
   } else {
     chips.forEach(c=>{ c.hidden=true; c.onclick=null; });
   }
+}
+// Account dropdown: opened from the identity chip; shows email + sign out.
+function openAcctMenu(e){
+  if(e && e.stopPropagation) e.stopPropagation();
+  if(!authUser) return;
+  const menu = document.getElementById("acctMenu");
+  if(!menu) return;
+  const nm = document.getElementById("amName"), em = document.getElementById("amEmail");
+  if(nm) nm.textContent = authUser.displayName || "Account";
+  if(em) em.textContent = authUser.email || "";
+  menu.hidden = false;
+}
+function closeAcctMenu(){ const m=document.getElementById("acctMenu"); if(m) m.hidden=true; }
+{
+  const so = document.getElementById("amSignOut"), del = document.getElementById("amDelete");
+  if(so) so.onclick = async () => { closeAcctMenu(); try{ await auth.signOutUser(); }catch(e){} };
+  if(del) del.onclick = async () => {
+    if(!confirm("Delete your synced workout and presets from the cloud? Your device keeps its local copy.")) return;
+    closeAcctMenu(); clearTimeout(_cfgSaveT);
+    try{ if(cloud) await cloud.deleteAll(); }catch(e){}
+    try{ await auth.signOutUser(); }catch(e){}
+  };
+  document.addEventListener("click", (ev)=>{
+    const m=document.getElementById("acctMenu");
+    if(!m || m.hidden) return;
+    const t=ev.target;
+    if(t && t.closest && (t.closest("#acctMenu") || t.closest(".idchip"))) return;
+    closeAcctMenu();
+  });
+  document.addEventListener("keydown", (ev)=>{ if(ev.key==="Escape") closeAcctMenu(); });
 }
 function updateAccountUI(u){
   updateIdChips(u);

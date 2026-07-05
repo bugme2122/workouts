@@ -58,6 +58,13 @@
   .head .right{display:flex;align-items:center;gap:8px}
   .hrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
   .idcluster{display:inline-flex;align-items:center;gap:8px}
+  .acctmenu{position:fixed;top:56px;right:14px;z-index:60;min-width:210px;max-width:min(88vw,300px);background:linear-gradient(180deg,#16181d,#0e1014);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;box-shadow:0 20px 44px -20px #000}
+  .acctmenu[hidden]{display:none}
+  .acctmenu .amhead{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  .acctmenu .amname{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;color:var(--ink)}
+  .acctmenu .amemail{font-family:'Barlow',sans-serif;font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .acctmenu .ambtn{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:13px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;text-align:center}
+  .acctmenu .ambtn.danger{color:#ff6b6b;border-color:#5a2a2a}
   .idchip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:3px 11px 3px 3px;cursor:pointer;color:var(--ink);font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.04em;font-size:13px;max-width:150px}
   .idchip[hidden]{display:none}
   .idchip img,.idchip .av{width:24px;height:24px;border-radius:50%;flex:none;object-fit:cover}
