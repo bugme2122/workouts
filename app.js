@@ -50,7 +50,6 @@ async function onAuthChange(u){
   const wasSignedIn = !!authUser;
   authUser=u;
   if(u){
-    store.setWantsAuth(true);
     try{
       const { cloudBackend } = await import("./firebase-backend.js");
       cloud = cloudBackend(u.uid);
@@ -74,9 +73,9 @@ async function onAuthChange(u){
       }catch(e){}
     }catch(e){ /* keep local config on any cloud error */ }
   } else {
-    clearTimeout(_cfgSaveT); cloud=null; store.setWantsAuth(false);
+    clearTimeout(_cfgSaveT); cloud=null;
     // On an actual sign-out (was signed in), return to the welcome/sign-in screen.
-    if(wasSignedIn){ store.clearEntered(); showScreen("welcome"); }
+    if(wasSignedIn){ showScreen("welcome"); }
   }
   updateAccountUI(authUser);
 }
@@ -86,10 +85,15 @@ let config = loadConfig();
 // ---------- derived / phases ----------
 const RING_C = 2*Math.PI*108;
 let phases=[], cum=[], WORKOUT_TOTAL=0, N=0, LADN=0, TOTBLOCKS=0;
+// Signature of everything that determines person-card / big-circuit CONTENT (not the
+// per-frame ring/countdown). Recomputed only when the config changes, so render()'s
+// list renderers can cheaply detect "nothing changed" and skip a full DOM rebuild.
+let _contentSig = "";
 function build(){
   const r = buildPhases(config);
   phases = r.phases; cum = r.cum; WORKOUT_TOTAL = r.total;
   N = r.N; LADN = r.LADN; TOTBLOCKS = r.TOTBLOCKS;
+  _contentSig = JSON.stringify([config.people, config.stations, config.personNames]);
 }
 
 // ---------- audio / voice / haptics ----------
@@ -143,8 +147,16 @@ function personLabel(k){
     ? config.personNames[k].trim() : "P"+(k+1);
 }
 
+// Cache keys: the displayed block + content signature fully determine each list's DOM.
+// Content changes only a few times per workout (block rotation / config edit), so we
+// early-return on the ~60fps render() calls in between — avoiding teardown+rebuild churn
+// and letting the .rotate-flash CSS pulse actually progress instead of restarting at 0%.
+let _pcardKey = null, _bigKey = null;
 function renderPersonCards(block){
   const host = document.getElementById("personCards");
+  const key = block + "|" + _contentSig;
+  if (_pcardKey === key) return;
+  _pcardKey = key;
   const occ = occupants(block, config.people, N);
   host.innerHTML = "";
   occ.forEach(o=>{
@@ -165,6 +177,9 @@ function renderPersonCards(block){
 function renderBigCircuit(block) {
   const host = document.getElementById("bigCircuit");
   if (!host) return;
+  const key = block + "|" + _contentSig;
+  if (_bigKey === key) return;
+  _bigKey = key;
   const occ = occupants(block, config.people, N);
   const byStation = {};
   occ.forEach(o => { byStation[o.station] = o.person; });
@@ -208,7 +223,10 @@ function render(){
   else if(p.type==="prep"){ elPhase.textContent=running?"Get ready":"Tap to start"; elIv.textContent=config.stations.length+" stations · "+fmt(WORKOUT_TOTAL); }
   else { elPhase.textContent = p.type==="work"?"Work":(rot?"Rotate":"Rest"); elIv.textContent = config.ladder[p.iv][0]+"s on · "+config.ladder[p.iv][1]+"s off"; }
 
-  const frac = finished?0:Math.max(0,Math.min(1,remaining/(p.dur*1000)));
+  // Guard the divide: prep:0 makes p.dur*1000===0, so remaining/0 would be NaN
+  // (0/0) for one frame and produce a NaN stroke-dashoffset. Treat 0-duration as frac 0.
+  const denom = p.dur*1000;
+  const frac = (finished||denom<=0)?0:Math.max(0,Math.min(1,remaining/denom));
   elRing.setAttribute("stroke-dashoffset",(RING_C*(1-frac)).toFixed(1));
   elTcard.classList.toggle("urgent", !finished&&running&&(p.type==="work"||p.type==="rest")&&secLeft<=3);
 
@@ -519,7 +537,8 @@ if (bootedFromShare && !freshShare) {
   try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
 }
 applyTheme(config.theme);
-renderCatalog();
+// Note: the catalog is rendered by updateAccountUI(null) at the end of boot, so no
+// separate renderCatalog() call is needed here (it would be a redundant double render).
 if (freshShare) {
   showScreen("live"); build(); setupView(); reset();
 } else {
@@ -558,15 +577,18 @@ function openAcctMenu(e){
   menu.hidden = false;
 }
 function closeAcctMenu(){ const m=document.getElementById("acctMenu"); if(m) m.hidden=true; }
+// Shared account actions, wired from both the dropdown and the settings panel.
+async function signOut(){ try{ await auth.signOutUser(); }catch(e){} }
+async function deleteCloud(){
+  if(!confirm("Delete your synced workout and presets from the cloud? Your device keeps its local copy.")) return;
+  clearTimeout(_cfgSaveT);
+  try{ if(cloud) await cloud.deleteAll(); }catch(e){}
+  try{ await auth.signOutUser(); }catch(e){}
+}
 {
   const so = document.getElementById("amSignOut"), del = document.getElementById("amDelete");
-  if(so) so.onclick = async () => { closeAcctMenu(); try{ await auth.signOutUser(); }catch(e){} };
-  if(del) del.onclick = async () => {
-    if(!confirm("Delete your synced workout and presets from the cloud? Your device keeps its local copy.")) return;
-    closeAcctMenu(); clearTimeout(_cfgSaveT);
-    try{ if(cloud) await cloud.deleteAll(); }catch(e){}
-    try{ await auth.signOutUser(); }catch(e){}
-  };
+  if(so) so.onclick = () => { closeAcctMenu(); signOut(); };
+  if(del) del.onclick = () => { closeAcctMenu(); deleteCloud(); };
   document.addEventListener("click", (ev)=>{
     const m=document.getElementById("acctMenu");
     if(!m || m.hidden) return;
@@ -587,13 +609,8 @@ function updateAccountUI(u){
     box.innerHTML = '<div class="who">'+esc(name)+'</div>'+
       '<button id="acctSignOut">Sign out</button>'+
       '<button id="acctDelete" class="danger">Delete my cloud data</button>';
-    document.getElementById("acctSignOut").onclick = async () => { try{ await auth.signOutUser(); }catch(e){} };
-    document.getElementById("acctDelete").onclick = async () => {
-      if(!confirm("Delete your synced workout and presets from the cloud? Your device keeps its local copy.")) return;
-      clearTimeout(_cfgSaveT);
-      try{ if(cloud) await cloud.deleteAll(); }catch(e){}
-      try{ await auth.signOutUser(); }catch(e){}
-    };
+    document.getElementById("acctSignOut").onclick = signOut;
+    document.getElementById("acctDelete").onclick = deleteCloud;
     if(wu){ wu.hidden=false; wu.textContent="Signed in as "+name; }
   } else {
     box.innerHTML = '<div>Not signed in &mdash; using this device only.</div>'+

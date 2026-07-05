@@ -78,24 +78,41 @@ export function migrate(c) {
   return out;
 }
 
+// Caps on untrusted array lengths — a share link decodes attacker-controlled JSON,
+// and a giant stations/ladder array would stall the main thread building phases/DOM.
+// 40 stations / 60 ladder intervals are far beyond any real workout.
+const MAX_STATIONS = 40, MAX_LADDER = 60;
+
 export function sanitize(c) {
-  c.stations = (c.stations || []).map(s => ({
-    ex: (s.ex || "").trim() || "Exercise",
-    gear: (s.gear || "").trim(),
-    rep: (s.rep || "").trim(),
-    url: (/^https?:\/\//i.test(s.url || "")) ? s.url : "",
-  }));
+  c.stations = (c.stations || []).slice(0, MAX_STATIONS).map(s0 => {
+    // Coerce non-object entries (null / string / number from a crafted config) so
+    // reading .ex/.gear/... can never throw a TypeError at module load.
+    const s = (s0 && typeof s0 === "object") ? s0 : {};
+    return {
+      ex: (s.ex || "").trim() || "Exercise",
+      gear: (s.gear || "").trim(),
+      rep: (s.rep || "").trim(),
+      url: (/^https?:\/\//i.test(s.url || "")) ? s.url : "",
+    };
+  });
   if (!c.stations.length) c.stations = [{ ex: "Exercise", gear: "", rep: "" }];
-  c.ladder = (c.ladder || []).map(p => [
-    Math.max(1, parseInt(p[0]) || 1),
-    Math.max(0, parseInt(p[1]) || 0),
-  ]);
+  c.ladder = (c.ladder || []).slice(0, MAX_LADDER).map(p => {
+    const pair = Array.isArray(p) ? p : [];
+    return [
+      Math.max(1, parseInt(pair[0]) || 1),
+      Math.max(0, parseInt(pair[1]) || 0),
+    ];
+  });
   if (!c.ladder.length) c.ladder = [[30, 15]];
   c.prep = Math.max(0, Math.min(60, parseInt(c.prep) || 0));
   c.targetMin = Math.max(0, Math.min(180, parseInt(c.targetMin) || 0));
-  c.volume = Math.max(0, Math.min(1, c.volume));
+  // Coerce volume: "loud" -> NaN and null both fall back to the default (not NaN, not silent).
+  const v = Number(c.volume);
+  c.volume = Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : DEFAULTS.volume;
   c.people = clampPeople(c.people, c.stations.length);
-  c.personNames = (c.personNames || []).slice(0, c.people);
+  // Coerce every name to a string so app.js personLabel()'s .trim() can never throw.
+  c.personNames = (c.personNames || []).slice(0, c.people)
+    .map(n => typeof n === "string" ? n : "");
   return c;
 }
 

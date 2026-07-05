@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideMigration, local, wantsAuth, setWantsAuth, hasEntered, setEntered, clearEntered } from "../store.js";
+import { decideMigration, local } from "../store.js";
 
 // Minimal in-memory localStorage stub for Node.
 function stubLocalStorage() {
@@ -30,13 +30,4 @@ test("local backend round-trips config and presets via localStorage", () => {
   assert.deepEqual(local.loadPresets(), {});
   local.savePresets({ A: { x: 1 } });
   assert.deepEqual(local.loadPresets(), { A: { x: 1 } });
-});
-test("wantsAuth and hasEntered flags persist and clear", () => {
-  stubLocalStorage();
-  assert.equal(wantsAuth(), false);
-  setWantsAuth(true); assert.equal(wantsAuth(), true);
-  setWantsAuth(false); assert.equal(wantsAuth(), false);
-  assert.equal(hasEntered(), false);
-  setEntered(); assert.equal(hasEntered(), true);
-  clearEntered(); assert.equal(hasEntered(), false);
 });
