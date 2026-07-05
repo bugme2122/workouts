@@ -86,10 +86,15 @@ let config = loadConfig();
 // ---------- derived / phases ----------
 const RING_C = 2*Math.PI*108;
 let phases=[], cum=[], WORKOUT_TOTAL=0, N=0, LADN=0, TOTBLOCKS=0;
+// Signature of everything that determines person-card / big-circuit CONTENT (not the
+// per-frame ring/countdown). Recomputed only when the config changes, so render()'s
+// list renderers can cheaply detect "nothing changed" and skip a full DOM rebuild.
+let _contentSig = "";
 function build(){
   const r = buildPhases(config);
   phases = r.phases; cum = r.cum; WORKOUT_TOTAL = r.total;
   N = r.N; LADN = r.LADN; TOTBLOCKS = r.TOTBLOCKS;
+  _contentSig = JSON.stringify([config.people, config.stations, config.personNames]);
 }
 
 // ---------- audio / voice / haptics ----------
@@ -143,8 +148,16 @@ function personLabel(k){
     ? config.personNames[k].trim() : "P"+(k+1);
 }
 
+// Cache keys: the displayed block + content signature fully determine each list's DOM.
+// Content changes only a few times per workout (block rotation / config edit), so we
+// early-return on the ~60fps render() calls in between — avoiding teardown+rebuild churn
+// and letting the .rotate-flash CSS pulse actually progress instead of restarting at 0%.
+let _pcardKey = null, _bigKey = null;
 function renderPersonCards(block){
   const host = document.getElementById("personCards");
+  const key = block + "|" + _contentSig;
+  if (_pcardKey === key) return;
+  _pcardKey = key;
   const occ = occupants(block, config.people, N);
   host.innerHTML = "";
   occ.forEach(o=>{
@@ -165,6 +178,9 @@ function renderPersonCards(block){
 function renderBigCircuit(block) {
   const host = document.getElementById("bigCircuit");
   if (!host) return;
+  const key = block + "|" + _contentSig;
+  if (_bigKey === key) return;
+  _bigKey = key;
   const occ = occupants(block, config.people, N);
   const byStation = {};
   occ.forEach(o => { byStation[o.station] = o.person; });
