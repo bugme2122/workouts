@@ -98,6 +98,56 @@ test("sanitize drops non-http(s) station urls", () => {
   assert.equal(c.stations[0].url, "");
 });
 
+test("sanitize coerces a non-object station entry without throwing (crafted-config guard)", () => {
+  let c;
+  assert.doesNotThrow(() => {
+    c = sanitize(migrate({ stations: [null, "oops", 42, { ex: "Real" }], ladder: [[20, 10]] }));
+  });
+  // null/string/number entries become the safe default "Exercise"; the real one survives.
+  assert.equal(c.stations[0].ex, "Exercise");
+  assert.equal(c.stations[1].ex, "Exercise");
+  assert.equal(c.stations[2].ex, "Exercise");
+  assert.equal(c.stations[3].ex, "Real");
+});
+
+test("sanitize coerces a non-finite volume to the default, and clamps a numeric one", () => {
+  // "loud" -> NaN -> default (0.8 in engine DEFAULTS), NOT NaN (the primary bug)
+  assert.equal(sanitize({ volume: "loud", stations: [{ ex: "A" }], ladder: [[20, 10]] }).volume, 0.8);
+  // undefined -> NaN via Number() -> default
+  assert.equal(sanitize({ stations: [{ ex: "A" }], ladder: [[20, 10]] }).volume, 0.8);
+  // null -> Number(null)===0 (finite) -> clamped to 0; never NaN
+  assert.equal(sanitize({ volume: null, stations: [{ ex: "A" }], ladder: [[20, 10]] }).volume, 0);
+  // a numeric string coerces and clamps into [0,1]
+  assert.equal(sanitize({ volume: "0.5", stations: [{ ex: "A" }], ladder: [[20, 10]] }).volume, 0.5);
+  assert.equal(sanitize({ volume: 5, stations: [{ ex: "A" }], ladder: [[20, 10]] }).volume, 1);
+  assert.equal(sanitize({ volume: -3, stations: [{ ex: "A" }], ladder: [[20, 10]] }).volume, 0);
+});
+
+test("sanitize caps huge stations/ladder arrays so the main thread can't stall", () => {
+  const stations = Array.from({ length: 500 }, (_, i) => ({ ex: "S" + i }));
+  const ladder = Array.from({ length: 500 }, () => [20, 10]);
+  const c = sanitize({ stations, ladder, volume: 0.8 });
+  assert.equal(c.stations.length, 40);
+  assert.equal(c.ladder.length, 60);
+});
+
+test("sanitize coerces non-string personNames entries so personLabel .trim() can't throw", () => {
+  const c = sanitize({
+    people: 3, personNames: [null, 42, { x: 1 }],
+    stations: [{ ex: "A" }, { ex: "B" }, { ex: "C" }], ladder: [[20, 10]], volume: 0.8,
+  });
+  assert.ok(c.personNames.every(n => typeof n === "string"), "all names are strings");
+});
+
+test("sanitize survives a fully crafted config (null station + bad volume) without throwing", () => {
+  let c;
+  assert.doesNotThrow(() => {
+    c = sanitize(migrate({ stations: [null], volume: "loud", ladder: [[20, 10]] }));
+  });
+  assert.equal(c.stations[0].ex, "Exercise");
+  assert.equal(c.volume, 0.8);
+});
+
 import { secondCue } from "../engine.js";
 
 test("secondCue: prep speaks only the last 3 seconds, with beep", () => {
