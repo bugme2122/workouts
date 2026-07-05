@@ -47,6 +47,7 @@ async function connectAuth(){
   catch(e){ _authInited=false; }
 }
 async function onAuthChange(u){
+  const wasSignedIn = !!authUser;
   authUser=u;
   if(u){
     store.setWantsAuth(true);
@@ -74,6 +75,8 @@ async function onAuthChange(u){
     }catch(e){ /* keep local config on any cloud error */ }
   } else {
     clearTimeout(_cfgSaveT); cloud=null; store.setWantsAuth(false);
+    // On an actual sign-out (was signed in), return to the welcome/sign-in screen.
+    if(wasSignedIn){ store.clearEntered(); showScreen("welcome"); }
   }
   updateAccountUI(authUser);
 }

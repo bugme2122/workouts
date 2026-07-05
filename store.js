@@ -17,6 +17,7 @@ export function wantsAuth() { try { return localStorage.getItem(LS_WANTS_AUTH) =
 export function setWantsAuth(v) { try { v ? localStorage.setItem(LS_WANTS_AUTH, "1") : localStorage.removeItem(LS_WANTS_AUTH); } catch (e) {} }
 export function hasEntered() { try { return localStorage.getItem(LS_ENTERED) === "1"; } catch (e) { return false; } }
 export function setEntered() { try { localStorage.setItem(LS_ENTERED, "1"); } catch (e) {} }
+export function clearEntered() { try { localStorage.removeItem(LS_ENTERED); } catch (e) {} }
 
 // Decide a just-signed-in user's config from local + cloud snapshots. Cloud wins.
 export function decideMigration(localConfig, cloudConfig) {
