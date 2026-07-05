@@ -375,7 +375,7 @@ function renderPresets(){ const L=$("presetList"); const ps=getPresets(); L.inne
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
 // settings events
-$("gear").onclick=openSettings;
+document.querySelectorAll(".gearbtn").forEach(b=>{ b.onclick=openSettings; });
 $("closeS").onclick=()=>{ if(sheetFromCustomize){ closeSettings(); applyTheme(draft.theme); } else { applyTheme(config.theme); closeSettings(); } };
 $("addStation").onclick=()=>{ draft.stations.push({ex:"New exercise",gear:"",rep:""}); renderStationRows(); };
 $("addInterval").onclick=()=>{ const lastp=draft.ladder[draft.ladder.length-1]||[30,15]; draft.ladder.push([lastp[0],lastp[1]]); renderLadderRows(); };
