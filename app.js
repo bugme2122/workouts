@@ -410,21 +410,31 @@ function showScreen(name) {
   document.getElementById("screen-" + name).classList.add("active");
 }
 
+const GUEST_FREE = 2;   // guests can use the first N workouts; the rest need sign-in
 function renderCatalog() {
   const stack = document.getElementById("catalogStack");
+  if (!stack) return;
   stack.innerHTML = "";
-  WORKOUTS.forEach(w => {
+  const signedIn = !!authUser;
+  WORKOUTS.forEach((w, i) => {
+    const locked = !signedIn && i >= GUEST_FREE;
     const card = document.createElement("div");
-    card.className = "wcard";
+    card.className = "wcard" + (locked ? " locked" : "");
     const mins = estimateMinutes(workoutToConfig(w));
     card.innerHTML =
-      '<div class="wtop"><div><div class="wname">' + esc(w.name) + '</div>' +
+      '<div class="wtop"><div><div class="wname">' + esc(w.name) + (locked ? ' <span class="lock">🔒</span>' : '') + '</div>' +
       '<div class="wtag">' + esc(w.category) + '</div></div>' +
       '<div class="wdur">~' + mins + ' min</div></div>' +
       '<div class="exmini">' + w.stations.map(s => '<span>' + esc(s.ex) + '</span>').join("") + '</div>' +
-      '<div class="wfoot"><button class="cust">Customize</button><button class="go">Start ▸</button></div>';
-    card.querySelector(".cust").onclick = () => openCustomize(w);
-    card.querySelector(".go").onclick = () => { config = sanitize(workoutToConfig(w)); persist(); startLive(); };
+      (locked
+        ? '<div class="wfoot"><button class="go unlock">Sign in to unlock</button></div>'
+        : '<div class="wfoot"><button class="cust">Customize</button><button class="go">Start ▸</button></div>');
+    if (locked) {
+      card.querySelector(".unlock").onclick = () => showScreen("welcome");
+    } else {
+      card.querySelector(".cust").onclick = () => openCustomize(w);
+      card.querySelector(".go").onclick = () => { config = sanitize(workoutToConfig(w)); persist(); startLive(); };
+    }
     stack.appendChild(card);
   });
 }
@@ -497,14 +507,14 @@ $("goBtn").onclick = () => { config = sanitize(clone(draft)); persist(); startLi
 $("custBack").onclick = () => showScreen("home");
 $("custEditStations").onclick = openCustomizeEditor;
 $("custEditTheme").onclick = openCustomizeEditor;
-$("buildOwn").onclick = () => openCustomize(null);
+$("buildOwn").onclick = () => { if(!authUser){ showScreen("welcome"); return; } openCustomize(null); };
 
 // ---------- init ----------
 const bootedFromShare = /^#?[wc]=/.test(location.hash || "");
-// A URL hash deep-links straight to the live workout ONLY for a genuine first-time
-// share recipient (never entered, no local config). A leftover self-written hash on a
-// returning/local user is stale — clear it and route via the normal welcome/home flow.
-const freshShare = bootedFromShare && !store.hasEntered() && !store.local.loadConfig();
+// A URL hash deep-links straight to the live workout only for a genuine share
+// recipient (no local state). Otherwise a hash is stale — clear it. EVERY normal
+// load shows the welcome/sign-in gate; no silent auto-login (sign-in is explicit).
+const freshShare = bootedFromShare && !store.local.loadConfig();
 if (bootedFromShare && !freshShare) {
   try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
 }
@@ -512,18 +522,14 @@ applyTheme(config.theme);
 renderCatalog();
 if (freshShare) {
   showScreen("live"); build(); setupView(); reset();
-} else if (store.hasEntered()) {
-  showScreen("home");
 } else {
   showScreen("welcome");
 }
-if (store.wantsAuth()) connectAuth();   // returning signed-in user: reconnect + cloud-load (async)
 
-document.getElementById("guestBtn").onclick = () => { store.setEntered(); showScreen("home"); };
+document.getElementById("guestBtn").onclick = () => { showScreen("home"); };
 document.getElementById("signInBtn").onclick = async () => {
-  store.setEntered();
   try { await connectAuth(); await auth.signInWithGoogle(); showScreen("home"); }
-  catch (e) { showScreen("home"); }   // popup closed/blocked → continue as guest
+  catch (e) { /* popup closed/blocked → stay on the welcome screen */ }
 };
 
 function startLive() { build(); setupView(); reset(); showScreen("live"); ensureAudio(); }
@@ -572,6 +578,7 @@ function closeAcctMenu(){ const m=document.getElementById("acctMenu"); if(m) m.h
 }
 function updateAccountUI(u){
   updateIdChips(u);
+  renderCatalog();   // re-render so guest workout-locks update on sign in/out
   const box = document.getElementById("accountInfo");
   const wu = document.getElementById("welcomeUser");
   if(!box) return;

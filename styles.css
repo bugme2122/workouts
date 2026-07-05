@@ -58,6 +58,9 @@
   .head .right{display:flex;align-items:center;gap:8px}
   .hrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
   .idcluster{display:inline-flex;align-items:center;gap:8px}
+  .wcard.locked{opacity:.62}
+  .wcard .lock{font-size:13px;opacity:.85}
+  .wfoot .go.unlock{background:var(--panel2);color:var(--ink);border:1px solid var(--line);flex:1}
   .acctmenu{position:fixed;top:56px;right:14px;z-index:60;min-width:210px;max-width:min(88vw,300px);background:linear-gradient(180deg,#16181d,#0e1014);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;box-shadow:0 20px 44px -20px #000}
   .acctmenu[hidden]{display:none}
   .acctmenu .amhead{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
