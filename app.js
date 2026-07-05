@@ -23,8 +23,9 @@ function loadConfig(){
 }
 function persist(){
   store.local.saveConfig(config);
-  try{ history.replaceState(null,"","#"+encShare(config)); }catch(e){}
-  cloudSaveConfig(config);   // no-op until a cloud backend is attached (Task 3)
+  // Note: the URL hash is NOT written here — normal use keeps a clean URL so the
+  // welcome/home flow shows. A share link is produced only via "Copy shareable link".
+  cloudSaveConfig(config);
 }
 function getPresets(){ return store.local.loadPresets(); }
 function setPresets(o){ store.local.savePresets(o); cloudSavePresets(o); }
@@ -54,7 +55,7 @@ async function onAuthChange(u){
       cloud = cloudBackend(u.uid);
       let cloudCfg=null; try{ cloudCfg=await cloud.loadConfig(); }catch(e){}
       const dec = store.decideMigration(store.local.loadConfig(), cloudCfg);
-      const idle = !bootedFromShare && !running && (activeScreen==="home" || activeScreen==="welcome");
+      const idle = !freshShare && !running && (activeScreen==="home" || activeScreen==="welcome");
       if(dec.action==="use-cloud"){
         const cfg=sanitize(migrate(dec.config));
         store.local.saveConfig(cfg);                 // always cache the cloud copy locally
@@ -497,9 +498,16 @@ $("buildOwn").onclick = () => openCustomize(null);
 
 // ---------- init ----------
 const bootedFromShare = /^#?[wc]=/.test(location.hash || "");
+// A URL hash deep-links straight to the live workout ONLY for a genuine first-time
+// share recipient (never entered, no local config). A leftover self-written hash on a
+// returning/local user is stale — clear it and route via the normal welcome/home flow.
+const freshShare = bootedFromShare && !store.hasEntered() && !store.local.loadConfig();
+if (bootedFromShare && !freshShare) {
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+}
 applyTheme(config.theme);
 renderCatalog();
-if (bootedFromShare) {
+if (freshShare) {
   showScreen("live"); build(); setupView(); reset();
 } else if (store.hasEntered()) {
   showScreen("home");
