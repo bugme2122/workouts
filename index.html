@@ -26,7 +26,11 @@
   `Content-Security-Policy: frame-ancestors 'none'` (or `X-Frame-Options: DENY`).
 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://www.gstatic.com; frame-src https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'">
-<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<!-- Clickjacking guard. frame-ancestors above is ignored in a <meta> CSP, and
+     GitHub Pages cannot send it (or X-Frame-Options) as an HTTP header, so this
+     script provides the protection instead. Runs before paint; external file
+     because the CSP script-src is 'self' with no 'unsafe-inline'. -->
+<script src="./framebust.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Ladder Circuit Timer</title>
 <meta name="description" content="Configurable interval circuit timer for 1–6 people, with editable stations, ladder intervals, voice callouts and presets.">
