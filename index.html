@@ -6,8 +6,12 @@
   Content-Security-Policy. Tuned to exactly the origins this app already uses so it
   cannot break Google sign-in, Firestore, or Google Fonts. Per directive:
     default-src 'self'            — everything not listed below stays same-origin.
-    script-src  'self' gstatic    — our modules (self) + the Firebase SDK, which is
-                                     loaded via dynamic import() from www.gstatic.com.
+    script-src  'self' gstatic apis.google — our modules (self) + the Firebase SDK
+                                     (dynamic import() from www.gstatic.com) + gapi's
+                                     apis.google.com/js/api.js, which signInWithPopup
+                                     loads to build the auth-handshake iframe. Without
+                                     apis.google.com here, sign-in dies with the opaque
+                                     auth/internal-error.
     style-src   'self' fonts.googleapis 'unsafe-inline'
                                      — Google Fonts CSS + the app's inline styles
                                        (style attributes / style.setProperty for themes).
@@ -16,16 +20,17 @@
     connect-src 'self' *.googleapis *.firebaseio gstatic
                                      — Firestore + Identity Toolkit / Secure Token
                                        (all *.googleapis.com) + SDK module fetches.
-    frame-src   *.firebaseapp accounts.google
+    frame-src   *.firebaseapp accounts.google apis.google
                                      — the Firebase auth-handler iframe + Google chooser
-                                       used by signInWithPopup.
+                                       + the gapi iframe (apis.google.com), all used by
+                                       signInWithPopup.
     frame-ancestors/base-uri/object-src 'none' — anti-framing + hardening.
   NOTE: frame-ancestors (and a true X-Content-Type-Options: nosniff) are only enforced
   when sent as HTTP *headers* — browsers ignore frame-ancestors in a <meta> CSP. On a
   static host, also set these response headers: `X-Content-Type-Options: nosniff` and
   `Content-Security-Policy: frame-ancestors 'none'` (or `X-Frame-Options: DENY`).
 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://www.gstatic.com; frame-src https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://www.gstatic.com; frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'">
 <!-- Clickjacking guard. frame-ancestors above is ignored in a <meta> CSP, and
      GitHub Pages cannot send it (or X-Frame-Options) as an HTTP header, so this
      script provides the protection instead. Runs before paint; external file

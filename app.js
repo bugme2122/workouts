@@ -545,10 +545,19 @@ if (freshShare) {
   showScreen("welcome");
 }
 
+// Surface real sign-in failures to the console; stay quiet only for genuine
+// user cancellation (closing/cancelling the popup). A blanket empty catch here
+// once hid an auth/internal-error — never do that again.
+function reportSignInError(e){
+  const quiet = ["auth/popup-closed-by-user","auth/cancelled-popup-request","auth/user-cancelled"];
+  if(!e || quiet.includes(e.code)) return;
+  console.error("Google sign-in failed:", e.code || e.message || e);
+}
+
 document.getElementById("guestBtn").onclick = () => { showScreen("home"); };
 document.getElementById("signInBtn").onclick = async () => {
   try { await connectAuth(); await auth.signInWithGoogle(); showScreen("home"); }
-  catch (e) { /* popup closed/blocked → stay on the welcome screen */ }
+  catch (e) { reportSignInError(e); /* stay on the welcome screen */ }
 };
 
 function startLive() { build(); setupView(); reset(); showScreen("live"); ensureAudio(); }
@@ -616,7 +625,7 @@ function updateAccountUI(u){
     box.innerHTML = '<div>Not signed in &mdash; using this device only.</div>'+
       '<button id="acctSignIn">Sign in with Google to sync</button>';
     const b=document.getElementById("acctSignIn");
-    if(b) b.onclick = async () => { try{ await connectAuth(); await auth.signInWithGoogle(); }catch(e){} };
+    if(b) b.onclick = async () => { try{ await connectAuth(); await auth.signInWithGoogle(); }catch(e){ reportSignInError(e); } };
     if(wu){ wu.hidden=true; }
   }
 }
