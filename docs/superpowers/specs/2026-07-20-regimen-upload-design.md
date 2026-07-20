@@ -1,4 +1,8 @@
-# Uploadable Workout Regimen (JSON Ingest) — Requirements & Design Spec
+# Bring Your Own Workout (BYOW) — Requirements & Design Spec
+
+> **Feature name:** **Bring Your Own Workout (BYOW)** — the user-facing name for uploading a
+> JSON workout the app runs on the existing timer. `regimen@1` is the wire/schema identifier
+> inside the JSON file; "BYOW" is the product feature.
 
 **Date:** 2026-07-20
 **Status:** APPROVED (v1 scope) — decisions locked (see §10). Ready for implementation plan.

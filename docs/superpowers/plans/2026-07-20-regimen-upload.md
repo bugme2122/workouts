@@ -1,4 +1,7 @@
-# Uploadable Workout Regimen (JSON Ingest) — Implementation Plan
+# Bring Your Own Workout (BYOW) — Implementation Plan
+
+> **Feature name:** **Bring Your Own Workout (BYOW)**. `regimen@1` is the JSON schema identifier;
+> "BYOW" is the product feature.
 
 > **For agentic workers:** implement this plan task-by-task. Each task is independently
 > shippable and testable. Steps use checkbox (`- [ ]`) syntax for tracking.
