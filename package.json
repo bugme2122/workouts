@@ -5,7 +5,7 @@
   "scripts": {
     "start": "python -m http.server 8000",
     "dev": "npx --yes live-server --port=8000",
-    "test": "node --test",
-    "test:watch": "node --test --watch"
+    "test": "node --test tests/*.mjs",
+    "test:watch": "node --test --watch tests/*.mjs"
   }
 }
