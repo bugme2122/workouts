@@ -3,34 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <!--
-  Content-Security-Policy. Tuned to exactly the origins this app already uses so it
-  cannot break Google sign-in, Firestore, or Google Fonts. Per directive:
-    default-src 'self'            — everything not listed below stays same-origin.
-    script-src  'self' gstatic apis.google — our modules (self) + the Firebase SDK
-                                     (dynamic import() from www.gstatic.com) + gapi's
-                                     apis.google.com/js/api.js, which signInWithPopup
-                                     loads to build the auth-handshake iframe. Without
-                                     apis.google.com here, sign-in dies with the opaque
-                                     auth/internal-error.
-    style-src   'self' fonts.googleapis 'unsafe-inline'
-                                     — Google Fonts CSS + the app's inline styles
-                                       (style attributes / style.setProperty for themes).
-    font-src    fonts.gstatic + self/data — the Google Fonts webfont files.
-    img-src     'self' data: https: — data: app icons + user avatar (googleusercontent).
-    connect-src 'self' *.googleapis *.firebaseio gstatic
-                                     — Firestore + Identity Toolkit / Secure Token
-                                       (all *.googleapis.com) + SDK module fetches.
-    frame-src   *.firebaseapp accounts.google apis.google
-                                     — the Firebase auth-handler iframe + Google chooser
-                                       + the gapi iframe (apis.google.com), all used by
-                                       signInWithPopup.
+  Content-Security-Policy. Since the migration off Firebase/Google sign-in, the app is
+  same-origin: it talks only to its own API (connect-src 'self'), loads only its own
+  scripts, and needs no Google/Firebase frames. The only third party left is Google Fonts
+  (CSS from fonts.googleapis.com, webfonts from fonts.gstatic.com).
+    script-src  'self'                — our ES modules only (no CDN SDKs anymore).
+    style-src   'self' fonts.googleapis 'unsafe-inline' — Google Fonts CSS + theme inline styles.
+    font-src    'self' data: fonts.gstatic — the webfont files.
+    img-src     'self' data:          — data: app icons (no external avatars now).
+    connect-src 'self'                — the API is same-origin.
     frame-ancestors/base-uri/object-src 'none' — anti-framing + hardening.
-  NOTE: frame-ancestors (and a true X-Content-Type-Options: nosniff) are only enforced
-  when sent as HTTP *headers* — browsers ignore frame-ancestors in a <meta> CSP. On a
-  static host, also set these response headers: `X-Content-Type-Options: nosniff` and
+  NOTE: frame-ancestors is only enforced as an HTTP *header* (ignored in a <meta> CSP).
+  The Express server should also send `X-Content-Type-Options: nosniff` and
   `Content-Security-Policy: frame-ancestors 'none'` (or `X-Frame-Options: DENY`).
 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://www.gstatic.com; frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'">
 <!-- Clickjacking guard. frame-ancestors above is ignored in a <meta> CSP, and
      GitHub Pages cannot send it (or X-Frame-Options) as an HTTP header, so this
      script provides the protection instead. Runs before paint; external file
@@ -58,9 +45,15 @@
     <div class="brand"><b>Ladder</b> Circuit</div>
     <div class="wtagline">Color-coded interval circuits for 1&ndash;6 people.</div>
     <div id="welcomeUser" class="welcomeUser" hidden></div>
-    <button class="main" id="signInBtn">Sign in with Google</button>
-    <button class="ghost" id="guestBtn">Continue as guest</button>
-    <div class="hint" id="welcomeHint">Guest mode keeps everything on this device. Sign in to sync across devices.</div>
+    <form id="loginForm" class="loginForm" autocomplete="on">
+      <input id="loginEmail" type="email" placeholder="Email" autocomplete="username" required>
+      <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" required>
+      <label class="remember"><input id="loginRemember" type="checkbox"> Remember me</label>
+      <button class="main" id="signInBtn" type="submit">Sign in</button>
+      <div class="err" id="loginError" role="alert" hidden></div>
+    </form>
+    <button class="ghost" id="guestBtn" type="button">Continue as guest</button>
+    <div class="hint" id="welcomeHint">Guest mode keeps everything on this device. Sign in to sync across devices. Accounts are created by an administrator.</div>
   </div>
 </section>
 <section id="screen-home" class="screen">

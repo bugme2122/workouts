@@ -544,30 +544,39 @@ if (freshShare) {
   showScreen("welcome");
 }
 
-// Surface real sign-in failures to the console; stay quiet only for genuine
-// user cancellation (closing/cancelling the popup). A blanket empty catch here
-// once hid an auth/internal-error — never do that again.
-function reportSignInError(e){
-  const quiet = ["auth/popup-closed-by-user","auth/cancelled-popup-request","auth/user-cancelled"];
-  if(!e || quiet.includes(e.code)) return;
-  console.error("Google sign-in failed:", e.code || e.message || e);
-}
-
 document.getElementById("guestBtn").onclick = () => { showScreen("home"); };
-document.getElementById("signInBtn").onclick = async () => {
-  try { await connectAuth(); await auth.signInWithGoogle(); showScreen("home"); }
-  catch (e) { reportSignInError(e); /* stay on the welcome screen */ }
-};
+
+// Email/password sign-in. Accounts are admin-provisioned (no self-registration). Errors are shown
+// inline; the server returns a generic "Invalid email or password." so we don't leak which was wrong.
+const loginForm = document.getElementById("loginForm");
+if(loginForm) loginForm.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const email = (document.getElementById("loginEmail").value || "").trim();
+  const password = document.getElementById("loginPassword").value || "";
+  const remember = !!document.getElementById("loginRemember").checked;
+  const errEl = document.getElementById("loginError");
+  const btn = document.getElementById("signInBtn");
+  if(errEl){ errEl.hidden = true; errEl.textContent = ""; }
+  if(btn) btn.disabled = true;
+  try {
+    await connectAuth();               // wire auth (idempotent) so onAuthChange drives cloud sync
+    await auth.login(email, password, remember);
+    const pw = document.getElementById("loginPassword"); if(pw) pw.value = "";
+    showScreen("home");
+  } catch (e) {
+    if(errEl){ errEl.textContent = (e && e.message) ? e.message : "Sign in failed."; errEl.hidden = false; }
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+});
 
 function startLive() { build(); setupView(); reset(); showScreen("live"); ensureAudio(); }
 
 function updateIdChips(u){
   const chips = document.querySelectorAll(".idchip");
   if(u){
-    const first = ((u.displayName || u.email || "Account").trim().split(/\s+/)[0]) || "Account";
-    const av = u.photoURL
-      ? '<img src="'+esc(u.photoURL)+'" alt="" referrerpolicy="no-referrer">'
-      : '<span class="av">'+esc((first[0]||"?").toUpperCase())+'</span>';
+    const first = ((u.firstName || u.email || "Account").trim().split(/\s+/)[0]) || "Account";
+    const av = '<span class="av">'+esc((first[0]||"?").toUpperCase())+'</span>';
     chips.forEach(c=>{ c.innerHTML = av+'<span class="nm">'+esc(first)+'</span>'; c.hidden=false; c.onclick=openAcctMenu; });
   } else {
     chips.forEach(c=>{ c.hidden=true; c.onclick=null; });
@@ -580,7 +589,7 @@ function openAcctMenu(e){
   const menu = document.getElementById("acctMenu");
   if(!menu) return;
   const nm = document.getElementById("amName"), em = document.getElementById("amEmail");
-  if(nm) nm.textContent = authUser.displayName || "Account";
+  if(nm) nm.textContent = [authUser.firstName, authUser.lastName].filter(Boolean).join(" ") || authUser.email || "Account";
   if(em) em.textContent = authUser.email || "";
   menu.hidden = false;
 }
@@ -613,7 +622,7 @@ function updateAccountUI(u){
   const wu = document.getElementById("welcomeUser");
   if(!box) return;
   if(u){
-    const name = u.displayName || u.email || "Signed in";
+    const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || "Signed in";
     box.innerHTML = '<div class="who">'+esc(name)+'</div>'+
       '<button id="acctSignOut">Sign out</button>'+
       '<button id="acctDelete" class="danger">Delete my cloud data</button>';
@@ -622,10 +631,13 @@ function updateAccountUI(u){
     if(wu){ wu.hidden=false; wu.textContent="Signed in as "+name; }
   } else {
     box.innerHTML = '<div>Not signed in &mdash; using this device only.</div>'+
-      '<button id="acctSignIn">Sign in with Google to sync</button>';
+      '<button id="acctSignIn">Sign in to sync</button>';
     const b=document.getElementById("acctSignIn");
-    if(b) b.onclick = async () => { try{ await connectAuth(); await auth.signInWithGoogle(); }catch(e){ reportSignInError(e); } };
+    if(b) b.onclick = () => { closeSettings && closeSettings(); showScreen("welcome"); };
     if(wu){ wu.hidden=true; }
   }
 }
 updateAccountUI(null);   // initial (signed-out) render
+// Restore a remembered session on load: wires auth + onAuthChange so a returning user is signed
+// in and their cloud config syncs. Guests (no stored token) are unaffected.
+connectAuth();
