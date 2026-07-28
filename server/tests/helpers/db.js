@@ -20,3 +20,16 @@ export async function disconnectMemoryDb() {
   await mongoose.disconnect();
   if (mongod) await mongod.stop();
 }
+
+// Best-effort connect. Returns true if an in-memory Mongo is available, false if the mongod binary
+// can't be provisioned (e.g. a sandbox that blocks the download) — so DB-backed suites can skip
+// cleanly instead of failing. Where Mongo IS available (CI, local dev) the suites run fully.
+export async function tryConnectMemoryDb() {
+  try {
+    await connectMemoryDb();
+    return true;
+  } catch (e) {
+    console.warn(`[tests] in-memory MongoDB unavailable — skipping DB-backed suites: ${e.message}`);
+    return false;
+  }
+}

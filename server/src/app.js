@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import authRoutes from './routes/auth.routes.js';
 
 // Build the Express app. Kept separate from index.js so tests can import it without binding a port.
 // Route modules (auth, state, users) are added by later tasks; this scaffold wires health + the
@@ -35,10 +36,10 @@ export function buildApp() {
 
   router.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
-  // --- Route mounting (added by later tasks) ---
-  // router.use('/api/auth', authRoutes);
-  // router.use('/api/state', stateRoutes);
-  // router.use('/api/users', userRoutes);
+  // --- Route mounting ---
+  router.use('/api/auth', authRoutes);
+  // router.use('/api/state', stateRoutes);   // #13
+  // router.use('/api/users', userRoutes);    // #13
 
   // Single-service deploy seam: serve the built static app + fallback when a build dir is present.
   // E4 wires CLIENT_DIST + BASE_PATH injection; absent here so the scaffold stays API-only.
