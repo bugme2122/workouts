@@ -1,0 +1,9 @@
+**/node_modules
+server/public
+.git
+.github
+docs
+*.md
+**/.env
+**/.env.*
+!**/.env.example
