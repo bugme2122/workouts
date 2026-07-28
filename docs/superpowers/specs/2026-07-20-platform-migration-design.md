@@ -72,9 +72,11 @@ Tracked under a parent epic; the auth swap is reused, not duplicated.
   `/api/presets`, `/api/account`; rewrite `store.js` cloud backend to REST; delete
   `firebase-backend.js`, `firebase-config.js`, `firestore.rules`; remove Firestore from CSP.
   *(Config/presets endpoints overlap Auth Task 4/7; this epic owns the Firebase removal + cutover.)*
-- **E4 — Frontend serving & build.** Minimal build that bakes `BASE_PATH`; Express `static`
-  serving under `/workouts`; fix asset/manifest/PWA paths for a base path; remove Firebase client
-  SDK + Google origins from CSP; login card replaces Google button (UI overlaps Auth Task 8).
+- **E4 — Serve the app under the `/workouts` subpath.** Today the app assumes it lives at the
+  site root (GitHub Pages). After migration Express serves it under `/workouts`. This epic makes
+  every URL the app relies on — assets, API calls, PWA manifest/icons/service-worker — resolve
+  correctly under that subpath, with `BASE_PATH` supplied at serve time (no hardcoding) so the same
+  code runs at root locally and under `/workouts` in prod.
 - **E5 — Infra provisioning, deploy & cutover.** Port FACS `Dockerfile` + `railway.json`; create
   Railway project + Atlas cluster + secrets; Cloudflare Worker route for `/workouts*`; healthcheck;
   `create-admin`; smoke test; **decommission GitHub Pages + Firebase project**.
@@ -90,16 +92,27 @@ Layout ported from FACS: `server/src/{app.js,index.js,db.js,config.js,routes,con
 middleware,models,utils}`. `BASE_PATH` mounts the whole app (API + static) under `/workouts`.
 Health at `/workouts/api/health`. Tests: **Vitest + supertest + mongodb-memory-server**.
 
-## 6. Frontend serving & build (E4)
+## 6. Serve the app under the `/workouts` subpath (E4)
 
-Today the app is **no-build** vanilla ESM with **relative** asset paths (already GitHub-Pages-safe).
-To serve under `/workouts` from Express and bake `BASE_PATH`:
-- Keep relative paths where possible; introduce a **tiny build step** (copy/stamp) that injects
-  `BASE_PATH` (a `<base>` tag or a `window.__BASE__` constant + `VITE_API_BASE_URL`-style API base)
-  so `api.js` calls `…/workouts/api/*` and the **PWA manifest / icons / service-worker scope** all
-  resolve under the base path. Mirror FACS's Dockerfile build-arg → runtime-env pattern.
-- Express serves the built app via `express.static` under `BASE_PATH`, with an SPA-style fallback
-  to `index.html` for client routes.
+The app stays **no-build** vanilla ESM. The only real problem to solve is that it currently assumes
+it lives at `/` and will now be served by Express under `/workouts`. Four things must resolve under
+that subpath:
+
+1. **Assets** (scripts, styles, icons): set the page's base once — a single `<base href="/workouts/">`
+   tag (or an injected `window.__BASE__` constant) — so relative references load from `/workouts/…`
+   rather than `/…`.
+2. **API base**: the app's data calls target `/workouts/api/*` (the base `api.js` uses, from E2/E3).
+3. **PWA**: the web-app manifest's `start_url`/`scope` and icon paths must sit under `/workouts`, or
+   "Add to Home Screen" and the service-worker scope break.
+4. **Runtime injection, not hardcoding**: Express injects the `BASE_PATH` value into `index.html`
+   when it serves it (string-replace a placeholder), so the same source runs at `/` locally and at
+   `/workouts` in prod — no build step, matching the app's existing no-build nature.
+
+Express serves the files via `express.static` under `BASE_PATH` and serves the injected
+`index.html` for the app entry.
+
+> CSP tightening and removing the Firebase/Google client bits are **not** here — they live in E2
+> (Google sign-in UI) and E3 (Firestore/CSP), to keep this epic strictly about the subpath.
 
 ## 7. Data layer (E3)
 
@@ -135,7 +148,7 @@ CI/CD pipeline beyond Railway's build, Firestore→Mongo migration tooling.
 
 ## 11. Risks
 
-- **No-build → build** introduces a small toolchain where there was none (E4). Keep it minimal.
-- **Base-path correctness** (PWA manifest, service worker scope, icons, API base) is the most
-  error-prone part of a `/path` deploy — dedicated attention in E4 + smoke test in E5.
+- **Base-path correctness** (PWA manifest, service-worker scope, icons, asset URLs, API base) is
+  the most error-prone part of a `/path` deploy — dedicated attention in E4 + smoke test in E5.
+  Runtime injection (not a build step) keeps the app's no-build nature intact.
 - **Cutover** is user-visible: verify before decommissioning Pages/Firebase (E5 ordering).
