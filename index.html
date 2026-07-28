@@ -22,6 +22,9 @@
      GitHub Pages cannot send it (or X-Frame-Options) as an HTTP header, so this
      script provides the protection instead. Runs before paint; external file
      because the CSP script-src is 'self' with no 'unsafe-inline'. -->
+<!-- Sets window.__BASE__ (the app's subpath) before the modules load. Served dynamically by the
+     Express server with the real BASE_PATH; a static/dev host gets the committed empty default. -->
+<script src="./base.js"></script>
 <script src="./framebust.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Ladder Circuit Timer</title>

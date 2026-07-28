@@ -10,7 +10,9 @@
     "start": "node src/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "create-admin": "node scripts/create-admin.mjs"
+    "create-admin": "node scripts/create-admin.mjs",
+    "build": "node scripts/build-client.mjs",
+    "prestart": "node scripts/build-client.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

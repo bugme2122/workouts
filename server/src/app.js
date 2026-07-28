@@ -3,7 +3,10 @@ import helmet from 'helmet';
 import cors from 'cors';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes from './routes/auth.routes.js';
 import stateRoutes from './routes/state.routes.js';
@@ -43,11 +46,17 @@ export function buildApp() {
   router.use('/api', stateRoutes); // /api/state, /api/presets, /api/account (verifyJWT per-route)
   router.use('/api/users', userRoutes); // /api/users/me
 
-  // Single-service deploy seam: serve the built static app + fallback when a build dir is present.
-  // E4 wires CLIENT_DIST + BASE_PATH injection; absent here so the scaffold stays API-only.
-  const clientDist = config.clientDist && path.resolve(config.clientDist);
-  if (clientDist && fs.existsSync(clientDist)) {
-    router.use(express.static(clientDist));
+  // Single-service deploy (E4): serve the staged client (server/public, produced by
+  // `npm run build`) under BASE_PATH. The client learns its subpath from a dynamically generated
+  // /base.js (strict CSP forbids inline scripts). Relative asset URLs (./app.js, data: manifest)
+  // resolve under BASE_PATH automatically, so no <base> tag or HTML rewrite is needed.
+  const clientDist = config.clientDist ? path.resolve(config.clientDist) : path.resolve(__dirname, '../public');
+  if (fs.existsSync(path.join(clientDist, 'index.html'))) {
+    router.get('/base.js', (req, res) => {
+      res.type('application/javascript').send(`window.__BASE__=${JSON.stringify(config.basePath || '')};`);
+    });
+    router.use(express.static(clientDist, { index: false }));
+    // Entry + fallback: any non-API GET returns index.html (the app is a single page).
     router.use((req, res, next) => {
       if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
       res.sendFile(path.join(clientDist, 'index.html'));
