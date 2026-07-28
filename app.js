@@ -51,8 +51,7 @@ async function onAuthChange(u){
   authUser=u;
   if(u){
     try{
-      const { cloudBackend } = await import("./firebase-backend.js");
-      cloud = cloudBackend(u.uid);
+      cloud = store.cloudBackend();
       let cloudCfg=null; try{ cloudCfg=await cloud.loadConfig(); }catch(e){}
       const dec = store.decideMigration(store.local.loadConfig(), cloudCfg);
       const idle = !freshShare && !running && (activeScreen==="home" || activeScreen==="welcome");

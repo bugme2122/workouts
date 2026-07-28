@@ -1,6 +1,8 @@
-// store.js — persistence orchestration. Firebase-free & unit-testable.
-// `local` is the localStorage backend (guest + offline cache). A cloud backend
-// (Firestore) is created elsewhere and injected by app.js for signed-in users.
+// store.js — persistence orchestration.
+// `local` is the localStorage backend (guest + offline cache). `cloudBackend()` is the signed-in
+// backend, talking to our own API (was Firestore) via api.js; app.js injects it on sign-in.
+import { api } from "./api.js";
+
 const LS_CONFIG = "ladder.last";
 const LS_PRESETS = "ladder.presets";
 
@@ -10,6 +12,19 @@ export const local = {
   loadPresets() { try { return JSON.parse(localStorage.getItem(LS_PRESETS) || "{}"); } catch (e) { return {}; } },
   savePresets(o) { try { localStorage.setItem(LS_PRESETS, JSON.stringify(o)); } catch (e) {} },
 };
+
+// Cloud backend for a signed-in user. Same interface the Firestore backend exposed
+// (loadConfig/saveConfig/loadPresets/savePresets/deleteAll) so app.js is unchanged in shape; the
+// user is inferred server-side from the JWT, so no uid is passed.
+export function cloudBackend() {
+  return {
+    async loadConfig() { const { config } = await api.get("/state"); return config ?? null; },
+    async saveConfig(c) { await api.put("/state", { config: c }); },
+    async loadPresets() { const { presets } = await api.get("/presets"); return presets || {}; },
+    async savePresets(o) { await api.put("/presets", { presets: o }); },
+    async deleteAll() { await api.del("/account"); },
+  };
+}
 
 // Decide a just-signed-in user's config from local + cloud snapshots. Cloud wins.
 export function decideMigration(localConfig, cloudConfig) {
