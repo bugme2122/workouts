@@ -1,0 +1,30 @@
+{
+  "name": "workouts-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Workouts API — Express + Mongoose (migrated off Firebase)",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "create-admin": "node scripts/create-admin.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.20.1"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.2.4",
+    "supertest": "^7.1.4",
+    "vitest": "^3.2.4"
+  }
+}
