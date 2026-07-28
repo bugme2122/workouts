@@ -156,3 +156,119 @@ export function lightDelta(config, base, fields = LIGHT_FIELDS) {
 export function applyLight(base, delta) {
   return { ...base, ...(delta || {}) };
 }
+
+// ===================================================================================
+// Bring Your Own Workout (BYOW) — regimen@1 ingest (pure, DOM-free)
+// A regimen is an uploaded, ordered list of timed segments compiled into the SAME phase array
+// buildPhases() produces, so the existing loop()/secondCue()/start()/reset() run it unchanged.
+// ===================================================================================
+export const REGIMEN_SCHEMA = "regimen@1";
+// Caps on untrusted uploads (mirror the sanitize() discipline). A giant/deeply-repeated regimen
+// would stall the main thread building phases/DOM.
+const MAX_SEGMENTS = 500;   // total flattened phases
+const MAX_ROUNDS = 50;      // per group
+const MAX_SECONDS = 3600;   // per segment
+const REGIMEN_TYPES = ["work", "rest", "prep"];
+
+// validateRegimen(obj) -> { ok:true, regimen } | { ok:false, error }. Cheap shape gate before sanitize.
+export function validateRegimen(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj))
+    return { ok: false, error: "That file isn't a workout object." };
+  if (obj.schema !== REGIMEN_SCHEMA)
+    return { ok: false, error: `Unsupported workout format — expected schema "${REGIMEN_SCHEMA}".` };
+  if (typeof obj.name !== "string" || !obj.name.trim())
+    return { ok: false, error: "This workout needs a name." };
+  if (!Array.isArray(obj.segments) || obj.segments.length === 0)
+    return { ok: false, error: "This workout needs at least one segment." };
+  return { ok: true, regimen: obj };
+}
+
+// Coerce one leaf (timed) segment; never throws. rest may be 0s; work/prep floor at 1s.
+function sanitizeSegment(s0) {
+  const s = (s0 && typeof s0 === "object" && !Array.isArray(s0)) ? s0 : {};
+  const type = REGIMEN_TYPES.includes(s.type) ? s.type : "work";
+  const floor = type === "rest" ? 0 : 1;
+  let secs = parseInt(s.seconds);
+  if (!Number.isFinite(secs)) secs = floor;
+  secs = Math.max(floor, Math.min(MAX_SECONDS, secs));
+  const out = { type, seconds: secs };
+  const label = (typeof s.label === "string" ? s.label : "").trim();
+  const say = (typeof s.say === "string" ? s.say : "").trim();
+  if (label) out.label = label;
+  if (say) out.say = say;
+  if (typeof s.halfway === "boolean") out.halfway = s.halfway;
+  return out;
+}
+
+// sanitizeRegimen(regimen) -> regimen (coerced, capped; never throws). Preserves one level of
+// group nesting; a group-inside-a-group has its nested group dropped (depth 1 only).
+export function sanitizeRegimen(regimen) {
+  const r = (regimen && typeof regimen === "object" && !Array.isArray(regimen)) ? regimen : {};
+  const out = {
+    schema: REGIMEN_SCHEMA,
+    name: (typeof r.name === "string" && r.name.trim()) ? r.name.trim() : "Workout",
+  };
+  const d = (r.defaults && typeof r.defaults === "object") ? r.defaults : {};
+  const vol = Number(d.volume);
+  out.defaults = {
+    prep: Math.max(0, Math.min(60, parseInt(d.prep) || 0)),
+    voice: d.voice !== false,
+    halfChime: d.halfChime !== false,
+    volume: Number.isFinite(vol) ? Math.max(0, Math.min(1, vol)) : DEFAULTS.volume,
+  };
+  if (typeof d.theme === "string") out.defaults.theme = d.theme; // caller validates against THEMES
+
+  let count = 0; // flattened footprint, capped at MAX_SEGMENTS
+  const segs = [];
+  for (const raw of (Array.isArray(r.segments) ? r.segments : [])) {
+    if (count >= MAX_SEGMENTS) break;
+    if (raw && typeof raw === "object" && raw.type === "group") {
+      const rounds = Math.max(1, Math.min(MAX_ROUNDS, parseInt(raw.rounds) || 1));
+      const inner = [];
+      for (const g of (Array.isArray(raw.segments) ? raw.segments : [])) {
+        if (g && typeof g === "object" && g.type === "group") continue; // depth 1
+        inner.push(sanitizeSegment(g));
+      }
+      if (!inner.length) continue;
+      const fitRounds = Math.min(rounds, Math.floor((MAX_SEGMENTS - count) / inner.length));
+      if (fitRounds <= 0) break;
+      segs.push({ type: "group", rounds: fitRounds, segments: inner });
+      count += fitRounds * inner.length;
+    } else {
+      segs.push(sanitizeSegment(raw));
+      count += 1;
+    }
+  }
+  if (!segs.length) segs.push({ type: "work", seconds: 30, label: "Exercise" });
+  out.segments = segs;
+  return out;
+}
+
+// buildRegimenPhases(regimen) -> { phases, cum, total } — same shape as buildPhases().
+// phases[0] is a prep phase (from defaults.prep); groups expand `rounds` times; cum excludes prep.
+export function buildRegimenPhases(regimen) {
+  const r = (regimen && Array.isArray(regimen.segments)) ? regimen : sanitizeRegimen(regimen);
+  const prep = Math.max(0, Math.min(60, parseInt(r.defaults?.prep) || 0));
+  const phases = [{ type: "prep", dur: prep }];
+  const pushLeaf = (s) => {
+    const ph = { type: s.type, dur: s.seconds, say: s.say || s.label || null };
+    if (s.label) ph.label = s.label;
+    if (typeof s.halfway === "boolean") ph.halfway = s.halfway;
+    phases.push(ph);
+  };
+  for (const s of r.segments) {
+    if (s.type === "group") {
+      const rounds = Math.max(1, parseInt(s.rounds) || 1);
+      for (let i = 0; i < rounds; i++) for (const g of s.segments) pushLeaf(g);
+    } else {
+      pushLeaf(s);
+    }
+  }
+  const cum = [];
+  let acc = 0;
+  for (let k = 0; k < phases.length; k++) {
+    cum[k] = acc;
+    if (phases[k].type !== "prep") acc += phases[k].dur;
+  }
+  return { phases, cum, total: acc };
+}
