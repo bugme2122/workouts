@@ -6,6 +6,8 @@ import path from 'node:path';
 import { config } from './config.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes from './routes/auth.routes.js';
+import stateRoutes from './routes/state.routes.js';
+import userRoutes from './routes/users.routes.js';
 
 // Build the Express app. Kept separate from index.js so tests can import it without binding a port.
 // Route modules (auth, state, users) are added by later tasks; this scaffold wires health + the
@@ -38,8 +40,8 @@ export function buildApp() {
 
   // --- Route mounting ---
   router.use('/api/auth', authRoutes);
-  // router.use('/api/state', stateRoutes);   // #13
-  // router.use('/api/users', userRoutes);    // #13
+  router.use('/api', stateRoutes); // /api/state, /api/presets, /api/account (verifyJWT per-route)
+  router.use('/api/users', userRoutes); // /api/users/me
 
   // Single-service deploy seam: serve the built static app + fallback when a build dir is present.
   // E4 wires CLIENT_DIST + BASE_PATH injection; absent here so the scaffold stays API-only.
