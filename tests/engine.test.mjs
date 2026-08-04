@@ -148,7 +148,7 @@ test("sanitize survives a fully crafted config (null station + bad volume) witho
   assert.equal(c.volume, 0.8);
 });
 
-import { secondCue } from "../engine.js";
+import { secondCue, guestAccessLabel } from "../engine.js";
 
 test("secondCue: prep speaks only the last 3 seconds, with beep", () => {
   assert.deepEqual(secondCue({ type: "prep", dur: 5 }, 3), { speak: "3", beep: true, chime: false });
@@ -179,4 +179,26 @@ test("secondCue: a 1s interval is silent at every second", () => {
   for (let s = 0; s <= 1; s++) {
     assert.deepEqual(secondCue({ type: "work", dur: 1 }, s), { speak: null, beep: false, chime: false });
   }
+});
+
+test("guestAccessLabel describes a partial guest allowance", () => {
+  assert.equal(guestAccessLabel(5, 2), "2 of 5 workouts");
+});
+
+test("guestAccessLabel says 'all' when the allowance covers the catalog", () => {
+  assert.equal(guestAccessLabel(5, 5), "All 5 workouts");
+  assert.equal(guestAccessLabel(5, 9), "All 5 workouts");
+});
+
+test("guestAccessLabel uses the singular for a one-workout allowance", () => {
+  assert.equal(guestAccessLabel(5, 1), "1 of 5 workouts");
+  assert.equal(guestAccessLabel(1, 1), "All 1 workout");
+});
+
+test("guestAccessLabel handles an empty catalog without producing junk", () => {
+  assert.equal(guestAccessLabel(0, 2), "No workouts");
+});
+
+test("guestAccessLabel clamps a negative allowance to none", () => {
+  assert.equal(guestAccessLabel(5, -1), "0 of 5 workouts");
 });

@@ -272,3 +272,13 @@ export function buildRegimenPhases(regimen) {
   }
   return { phases, cum, total: acc };
 }
+
+// Welcome-screen copy for how much of the catalog a path unlocks. Pure so it can be
+// tested; app.js feeds it WORKOUTS.length and GUEST_FREE.
+export function guestAccessLabel(total, free) {
+  const t = Math.max(0, total | 0);
+  const f = Math.min(Math.max(0, free | 0), t);
+  if (t === 0) return "No workouts";
+  const noun = t === 1 ? "workout" : "workouts";
+  return f >= t ? "All " + t + " " + noun : f + " of " + t + " " + noun;
+}
