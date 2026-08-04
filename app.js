@@ -89,7 +89,11 @@ async function onAuthChange(u){
   } else {
     clearTimeout(_cfgSaveT); cloud=null;
     // On an actual sign-out (was signed in), return to the welcome/sign-in screen.
-    if(wasSignedIn){ showScreen("welcome"); }
+    // Welcome is the app's only light surface; if the settings sheet is open (e.g. sign-out
+    // triggered from Account > Sign out inside the sheet) it must be closed first, or its
+    // hardcoded-dark .sheetcard is left floating over the now-light body with unreadable
+    // (var(--ink) is light-mode dark-on-dark) text. closeSettings() is a no-op if already closed.
+    if(wasSignedIn){ closeSettings(); showScreen("welcome"); }
   }
   updateAccountUI(authUser);
 }
