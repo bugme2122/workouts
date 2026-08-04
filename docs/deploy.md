@@ -18,6 +18,37 @@ Browser ──▶ flywren-technologies.com/workouts/*
         MongoDB Atlas
 ```
 
+## 0. Running locally (no Atlas, no MongoDB install)
+
+For development you do **not** need Atlas or a system MongoDB. From `server/`:
+
+```bash
+npm install
+npm run dev:local
+```
+
+This boots an embedded MongoDB (`mongodb-memory-server`) against a persistent data directory
+(`server/.data/mongo`, gitignored), seeds an admin on first run, stages the client, and serves
+everything at **http://localhost:4000**. Data survives restarts.
+
+Default seeded admin — override with env vars, and change it before doing anything real:
+
+| Variable | Default |
+|---|---|
+| `ADMIN_EMAIL` | `admin@local.test` |
+| `ADMIN_PASSWORD` | `LocalAdmin!2026` |
+
+```bash
+ADMIN_EMAIL="you@example.com" ADMIN_PASSWORD="a-strong-password" npm run dev:local
+```
+
+Seeding is idempotent: an existing admin is never overwritten. `BASE_PATH` is empty locally, so
+the app is at `/` rather than `/workouts`.
+
+> To use Atlas locally instead, add your machine's IP under **Network Access → Add Current IP
+> Address** in the Atlas console, put the SRV string in `server/.env`, and use `npm start`.
+> Without that allowlist entry the connection fails with a server-selection timeout.
+
 ## 1. MongoDB Atlas (separate cluster)
 
 1. Create a free **M0** cluster at https://www.mongodb.com/atlas.

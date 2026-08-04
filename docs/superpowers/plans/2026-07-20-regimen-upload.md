@@ -49,12 +49,12 @@ Coerce and cap an arbitrary parsed object into a safe `regimen@1` structure, or 
   `MAX_SEGMENTS=500`, `MAX_ROUNDS=50`, `MAX_SECONDS=3600`, nesting depth 1; drops unknown
   segment `type`s; `work`/`prep` seconds → ≥1, `rest` seconds → ≥0; strings coerced, never throws.
 
-- [ ] **Step 1:** Write failing tests: valid regimen passes; missing `schema`/`name`/`segments`
+- [x] **Step 1:** Write failing tests: valid regimen passes; missing `schema`/`name`/`segments`
   fails with a message; hostile inputs (non-object segments, `null` label, string `seconds`,
   `rounds: 9999`, nested `group` in `group`, 10k segments) are coerced/capped and never throw.
-- [ ] **Step 2:** Implement `validateRegimen` + `sanitizeRegimen` to pass. Mirror the coercion
+- [x] **Step 2:** Implement `validateRegimen` + `sanitizeRegimen` to pass. Mirror the coercion
   discipline in existing `sanitize()`.
-- [ ] **Step 3:** `node --test` green.
+- [x] **Step 3:** `node --test` green.
 
 ---
 
@@ -70,12 +70,12 @@ Flatten a sanitized regimen into the exact `{ phases, cum, total }` shape `build
   `{ type, dur, label, say }`, `group` expands `rounds` times, `cum` is monotonic, `total`
   excludes prep.
 
-- [ ] **Step 1:** Failing tests — flat list flattens 1:1; a `group{rounds:3}` triples its inner
+- [x] **Step 1:** Failing tests — flat list flattens 1:1; a `group{rounds:3}` triples its inner
   segments; `total` = sum of non-prep durs; `cum[k]` monotonic; a `dur>=12` segment makes
   `secondCue(phase, round(dur/2)).chime === true` (proves the halfway feature works through the
   **existing** function with no new halfway code).
-- [ ] **Step 2:** Implement to pass.
-- [ ] **Step 3:** `node --test` green.
+- [x] **Step 2:** Implement to pass.
+- [x] **Step 3:** `node --test` green.
 
 ---
 
@@ -85,13 +85,13 @@ Make the app able to run a regimen using the existing controls.
 
 **Files:** edit `app.js`.
 
-- [ ] **Step 1:** Add `adoptRegimen(regimen)` — sets `phases/cum/WORKOUT_TOTAL` from
+- [x] **Step 1:** Add `adoptRegimen(regimen)` — sets `phases/cum/WORKOUT_TOTAL` from
   `buildRegimenPhases()`, records `activeKind = "regimen"` (vs `"ladder"`), then `reset()` +
   `render()`. Do **not** touch `loop()`/`start()`.
-- [ ] **Step 2:** Extend `enterPhase(p, ...)` — when the active phase has a `say`/`label`
+- [x] **Step 2:** Extend `enterPhase(p, ...)` — when the active phase has a `say`/`label`
   (regimen), speak that via existing `say()`; otherwise keep current ladder callouts. `work`/`rest`
   still map to the same accent colors and beeps.
-- [ ] **Step 3:** Confirm Start/Pause/Resume/Reset and the "Halfway" line
+- [x] **Step 3:** Confirm Start/Pause/Resume/Reset and the "Halfway" line
   (`if(cue.chime && config.halfChime) say("Halfway")`) fire unchanged on a regimen.
 
 ---
@@ -100,11 +100,11 @@ Make the app able to run a regimen using the existing controls.
 
 **Files:** edit `index.html`, `app.js`, `styles.css`.
 
-- [ ] **Step 1:** Add an "Import workout (JSON)" control in the Settings/Customize sheet near
+- [x] **Step 1:** Add an "Import workout (JSON)" control in the Settings/Customize sheet near
   presets: a `<input type="file" accept="application/json,.json">` **and** a paste `<textarea>`.
-- [ ] **Step 2:** On file/paste → guarded `JSON.parse` → `validateRegimen` → `sanitizeRegimen`.
+- [x] **Step 2:** On file/paste → guarded `JSON.parse` → `validateRegimen` → `sanitizeRegimen`.
   Errors render **inline** next to the control (no `alert`).
-- [ ] **Step 3:** Preview card: name, segment count, total time, rounds; "Use this workout"
+- [x] **Step 3:** Preview card: name, segment count, total time, rounds; "Use this workout"
   button calls `adoptRegimen()`. Cancel leaves the current workout untouched.
 
 ---
@@ -113,10 +113,10 @@ Make the app able to run a regimen using the existing controls.
 
 **Files:** edit `index.html`, `app.js`, `styles.css`.
 
-- [ ] **Step 1:** Add a regimen live view: current segment `label`, big countdown, and "up next".
-- [ ] **Step 2:** In `render()`, branch on `activeKind`: `"regimen"` → new view; `"ladder"` →
+- [x] **Step 1:** Add a regimen live view: current segment `label`, big countdown, and "up next".
+- [x] **Step 2:** In `render()`, branch on `activeKind`: `"regimen"` → new view; `"ladder"` →
   existing person-cards/big-circuit path (unchanged).
-- [ ] **Step 3:** Honor `defaults.theme` if it's a known `THEMES` key; else keep current theme.
+- [x] **Step 3:** Honor `defaults.theme` if it's a known `THEMES` key; else keep current theme.
 
 ---
 
@@ -124,9 +124,9 @@ Make the app able to run a regimen using the existing controls.
 
 **Files:** edit `app.js`, `index.html`.
 
-- [ ] **Step 1:** "Download `.json`" action that serializes the active regimen (`Blob` +
+- [x] **Step 1:** "Download `.json`" action that serializes the active regimen (`Blob` +
   object URL). Round-trips: export → re-import yields an equivalent phase list.
-- [ ] **Step 2:** Test (TR-4) in `tests/regimen.test.mjs` on the pure serialize/parse path.
+- [x] **Step 2:** Test (TR-4) in `tests/regimen.test.mjs` on the pure serialize/parse path.
 
 ---
 
@@ -134,9 +134,9 @@ Make the app able to run a regimen using the existing controls.
 
 **Files:** edit `app.js`, `store.js`; verify against `firebase-backend.js`.
 
-- [ ] **Step 1:** Persist the adopted regimen through `store.js` (guest → `localStorage`).
-- [ ] **Step 2:** Save/load regimen presets under a **separate namespace** from ladder presets.
-- [ ] **Step 3:** Signed-in: save via existing cloud interface. Regimen serializes to a JSON
+- [x] **Step 1:** Persist the adopted regimen through `store.js` (guest → `localStorage`).
+- [x] **Step 2:** Save/load regimen presets under a **separate namespace** from ladder presets.
+- [x] **Step 3:** Signed-in: save via existing cloud interface. Regimen serializes to a JSON
   **string** (Firestore rejects nested arrays — existing `firebase-backend.js` already stores
   `{ json: JSON.stringify(...) }`, so this reuses that path).
 
