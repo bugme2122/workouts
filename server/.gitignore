@@ -1,3 +1,5 @@
 node_modules/
 .env
 public/
+# Embedded MongoDB data dir used by `npm run dev:local` (local development only).
+.data/
