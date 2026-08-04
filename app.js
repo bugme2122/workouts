@@ -6,6 +6,7 @@ import {
   blockLenOf, blocksFor, buildPhases, migrate, sanitize,
   clampPeople, occupants, setDefaults, secondCue,
   validateRegimen, sanitizeRegimen, buildRegimenPhases, REGIMEN_SCHEMA,
+  guestAccessLabel,
 } from "./engine.js";
 import * as store from "./store.js";
 import * as auth from "./auth.js";
@@ -652,20 +653,11 @@ function showScreen(name) {
 
 const GUEST_FREE = 2;   // guests can use the first N workouts; the rest need sign-in
 
-// Welcome-screen rung strips: one rung per catalog workout, lit for the ones that
-// path unlocks. Driven from WORKOUTS/GUEST_FREE so the count can never drift from
-// what renderCatalog() actually locks.
-function paintRungs() {
-  const total = WORKOUTS.length;
-  const fill = (elId, ctId, n) => {
-    const strip = document.getElementById(elId);
-    if (strip) strip.innerHTML = Array.from({ length: total },
-      (_, i) => '<i' + (i < n ? ' class="on"' : '') + '></i>').join("");
-    const ct = document.getElementById(ctId);
-    if (ct) ct.textContent = n === total ? "All " + total + " workouts" : n + " of " + total + " workouts";
-  };
-  fill("rungsMember", "ctMember", total);
-  fill("rungsGuest", "ctGuest", Math.min(GUEST_FREE, total));
+// Welcome-screen copy for how much of the catalog the guest path unlocks. Driven
+// from WORKOUTS/GUEST_FREE so it can never drift from what renderCatalog() locks.
+function paintGuestCount() {
+  const el = document.getElementById("guestCount");
+  if (el) el.textContent = guestAccessLabel(WORKOUTS.length, GUEST_FREE);
 }
 function renderCatalog() {
   const stack = document.getElementById("catalogStack");
@@ -790,7 +782,7 @@ if (freshShare) {
 }
 
 document.getElementById("guestBtn").onclick = () => { showScreen("home"); };
-paintRungs();
+paintGuestCount();
 
 // Email/password sign-in. Accounts are admin-provisioned (no self-registration). Errors are shown
 // inline; the server returns a generic "Invalid email or password." so we don't leak which was wrong.
