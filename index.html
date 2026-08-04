@@ -44,47 +44,37 @@
 </head>
 <body class="auth-light">
 <section id="screen-welcome" class="screen">
-  <div class="welcome">
-    <div class="brand"><b>Ladder</b> Circuit</div>
-    <div class="wtagline">Color-coded interval circuits for 1&ndash;6 people.</div>
+  <div class="auth">
+    <!-- The app's own mark: the timer ring with the interval dot. Inline SVG so it
+         inherits the light theme and needs no img-src beyond what the CSP allows.
+         Lime is deepened here because #c6f24e is invisible on white. -->
+    <svg class="authmark" viewBox="0 0 48 48" role="img" aria-label="Ladder Circuit">
+      <circle cx="24" cy="24" r="18" fill="none" stroke="#e3e5ea" stroke-width="5"/>
+      <circle cx="24" cy="24" r="18" fill="none" stroke="#6f9b16" stroke-width="5"
+              stroke-linecap="round" stroke-dasharray="85 200" transform="rotate(-90 24 24)"/>
+      <circle cx="24" cy="24" r="4.5" fill="#e08a1e"/>
+    </svg>
+
+    <h1 class="authhead">Welcome back</h1>
+    <p class="authsub">Color-coded interval circuits for 1&ndash;6 people.</p>
     <div id="welcomeUser" class="welcomeUser" hidden></div>
 
-    <div class="lane lane-member">
-      <div class="lanehead">
-        <span class="lanename">Member</span>
-        <span class="rungs" id="rungsMember" aria-hidden="true"></span>
-        <span class="lanect" id="ctMember"></span>
-      </div>
-      <form id="loginForm" class="loginForm" autocomplete="on">
-        <div class="field">
-          <label for="loginEmail">Email</label>
-          <input id="loginEmail" type="email" autocomplete="username" required spellcheck="false">
-        </div>
-        <div class="field">
-          <label for="loginPassword">Password</label>
-          <input id="loginPassword" type="password" autocomplete="current-password" required>
-        </div>
-        <label class="remember"><input id="loginRemember" type="checkbox"><span>Keep me signed in</span></label>
-        <button class="main" id="signInBtn" type="submit">Sign in</button>
-        <div class="err" id="loginError" role="alert" hidden></div>
-      </form>
-    </div>
+    <button class="guestbtn" id="guestBtn" type="button">Continue as guest</button>
+    <p class="guestnote" id="guestCount"></p>
 
-    <div class="lanesplit"><span>or</span></div>
+    <div class="authsplit"><span>or</span></div>
 
-    <button class="lane lane-guest" id="guestBtn" type="button">
-      <span class="lanehead">
-        <span class="lanename">Guest</span>
-        <span class="rungs" id="rungsGuest" aria-hidden="true"></span>
-        <span class="lanect" id="ctGuest"></span>
-      </span>
-      <span class="lanebody">
-        <span class="lanecta">Continue as guest <span class="arw" aria-hidden="true">&rsaquo;</span></span>
-        <span class="lanenote">Everything stays on this device.</span>
-      </span>
-    </button>
+    <form id="loginForm" class="authform" autocomplete="on">
+      <input class="authfield" id="loginEmail" type="email" placeholder="Email"
+             aria-label="Email" autocomplete="username" required spellcheck="false">
+      <input class="authfield" id="loginPassword" type="password" placeholder="Password"
+             aria-label="Password" autocomplete="current-password" required>
+      <label class="remember"><input id="loginRemember" type="checkbox"><span>Keep me signed in</span></label>
+      <button class="authcta" id="signInBtn" type="submit">Continue</button>
+      <div class="err" id="loginError" role="alert" hidden></div>
+    </form>
 
-    <div class="hint" id="welcomeHint">Accounts are created by an administrator.</div>
+    <p class="authfoot" id="welcomeHint">Accounts are created by an administrator.</p>
   </div>
 </section>
 <section id="screen-home" class="screen">
