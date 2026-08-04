@@ -179,6 +179,75 @@
 .welcome .wtagline{ font-family:'Barlow',sans-serif; color:var(--dim); font-size:14px; margin-bottom:6px; }
 .welcome .welcomeUser{ font-family:'Barlow Condensed',sans-serif; font-weight:700; color:var(--ink); font-size:16px; }
 #screen-welcome{ --accent: var(--brand); }
+
+/* ---- Welcome / sign-in lanes ------------------------------------------
+   Two paths, each headed by a rung strip: one rung per catalog workout,
+   lit for the ones that path unlocks. The strip is filled from JS
+   (paintRungs) so it always reflects WORKOUTS.length and GUEST_FREE. ---- */
+.lane{ display:block; width:100%; text-align:left; background:linear-gradient(180deg,var(--panel),#101216);
+  border:1px solid var(--line); border-radius:18px; padding:15px 16px 16px;
+  box-shadow:0 18px 40px -28px #000, inset 0 1px 0 #ffffff08; }
+.lane .lanehead{ display:flex; align-items:center; gap:9px; padding-bottom:12px; margin-bottom:14px;
+  border-bottom:1px solid var(--line); }
+.lane .lanename{ font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.18em;
+  text-transform:uppercase; font-size:12px; color:var(--ink); }
+.lane .lanect{ margin-left:auto; font-family:'Barlow Condensed',sans-serif; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; font-size:11px; color:var(--dim); white-space:nowrap; }
+.rungs{ display:inline-flex; gap:3px; align-items:center; }
+.rungs i{ display:block; width:4px; height:13px; border-radius:2px; background:var(--panel2);
+  border:1px solid var(--line); }
+.rungs i.on{ background:var(--brand); border-color:transparent; }
+.lane-guest .rungs i.on{ background:var(--dim); }
+
+/* Member lane: labelled fields, themed to the app instead of browser chrome. */
+.loginForm{ display:flex; flex-direction:column; gap:12px; text-align:left; }
+.loginForm .field{ display:flex; flex-direction:column; gap:5px; }
+.loginForm .field label{ font-family:'Barlow Condensed',sans-serif; font-weight:600; letter-spacing:.14em;
+  text-transform:uppercase; font-size:11px; color:var(--dim); }
+.loginForm input[type=email],.loginForm input[type=password]{
+  font-family:'Barlow',sans-serif; font-size:16px; color:var(--ink); background:var(--panel2);
+  border:1px solid var(--line); border-radius:11px; padding:13px 13px; width:100%;
+  transition:border-color .15s, box-shadow .15s; }
+.loginForm input[type=email]:focus,.loginForm input[type=password]:focus{
+  outline:none; border-color:var(--brand); box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 22%,transparent); }
+.loginForm input:-webkit-autofill{ -webkit-text-fill-color:var(--ink);
+  -webkit-box-shadow:0 0 0 40px var(--panel2) inset; caret-color:var(--ink); }
+
+/* Checkbox + label on one line — the phrase never breaks mid-way. */
+.loginForm .remember{ display:flex; align-items:center; gap:9px; cursor:pointer;
+  font-family:'Barlow',sans-serif; font-size:13px; color:var(--dim); }
+.loginForm .remember span{ white-space:nowrap; }
+.loginForm .remember input{ appearance:none; -webkit-appearance:none; flex:none; width:17px; height:17px;
+  border:1px solid var(--line); border-radius:5px; background:var(--panel2); display:grid; place-items:center;
+  cursor:pointer; margin:0; }
+.loginForm .remember input:checked{ background:var(--brand); border-color:transparent; }
+.loginForm .remember input:checked::after{ content:""; width:9px; height:5px; border:2px solid #0b0c0e;
+  border-top:0; border-right:0; transform:translateY(-1px) rotate(-45deg); }
+.loginForm .remember input:focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+.loginForm button.main{ margin-top:2px; padding:15px; font-size:17px; }
+.loginForm button.main:disabled{ filter:saturate(.35) brightness(.8); cursor:default; }
+.loginForm .err{ font-family:'Barlow',sans-serif; font-size:13px; color:#ff6b6b;
+  border-left:2px solid #ff6b6b; padding-left:10px; }
+.loginForm .err[hidden]{ display:none; }
+
+.lanesplit{ display:flex; align-items:center; gap:12px; color:var(--dim);
+  font-family:'Barlow Condensed',sans-serif; font-weight:600; letter-spacing:.16em;
+  text-transform:uppercase; font-size:11px; }
+.lanesplit::before,.lanesplit::after{ content:""; flex:1; height:1px; background:var(--line); }
+
+.lane-guest{ cursor:pointer; color:inherit; font:inherit; transition:border-color .15s, transform .05s; }
+.lane-guest:hover{ border-color:var(--dim); }
+.lane-guest:active{ transform:translateY(1px); }
+.lane-guest:focus-visible{ outline:2px solid var(--brand); outline-offset:3px; }
+.lane-guest .lanebody{ display:flex; flex-direction:column; gap:4px; }
+.lane-guest .lanecta{ font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; font-size:16px; color:var(--ink); }
+.lane-guest .arw{ color:var(--dim); }
+.lane-guest .lanenote{ font-family:'Barlow',sans-serif; font-size:12px; color:var(--dim); }
+
+@media (prefers-reduced-motion:reduce){
+  .lane,.lane-guest,.loginForm input{ transition:none; }
+}
 .accountInfo{ display:flex; flex-direction:column; gap:9px; font-family:'Barlow',sans-serif; font-size:13px; color:var(--dim); }
 .accountInfo .who{ color:var(--ink); font-weight:600; }
 .accountInfo button{ font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.08em; text-transform:uppercase; font-size:13px; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer; }

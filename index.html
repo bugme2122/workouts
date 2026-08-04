@@ -48,15 +48,43 @@
     <div class="brand"><b>Ladder</b> Circuit</div>
     <div class="wtagline">Color-coded interval circuits for 1&ndash;6 people.</div>
     <div id="welcomeUser" class="welcomeUser" hidden></div>
-    <form id="loginForm" class="loginForm" autocomplete="on">
-      <input id="loginEmail" type="email" placeholder="Email" autocomplete="username" required>
-      <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" required>
-      <label class="remember"><input id="loginRemember" type="checkbox"> Remember me</label>
-      <button class="main" id="signInBtn" type="submit">Sign in</button>
-      <div class="err" id="loginError" role="alert" hidden></div>
-    </form>
-    <button class="ghost" id="guestBtn" type="button">Continue as guest</button>
-    <div class="hint" id="welcomeHint">Guest mode keeps everything on this device. Sign in to sync across devices. Accounts are created by an administrator.</div>
+
+    <div class="lane lane-member">
+      <div class="lanehead">
+        <span class="lanename">Member</span>
+        <span class="rungs" id="rungsMember" aria-hidden="true"></span>
+        <span class="lanect" id="ctMember"></span>
+      </div>
+      <form id="loginForm" class="loginForm" autocomplete="on">
+        <div class="field">
+          <label for="loginEmail">Email</label>
+          <input id="loginEmail" type="email" autocomplete="username" required spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" required>
+        </div>
+        <label class="remember"><input id="loginRemember" type="checkbox"><span>Keep me signed in</span></label>
+        <button class="main" id="signInBtn" type="submit">Sign in</button>
+        <div class="err" id="loginError" role="alert" hidden></div>
+      </form>
+    </div>
+
+    <div class="lanesplit"><span>or</span></div>
+
+    <button class="lane lane-guest" id="guestBtn" type="button">
+      <span class="lanehead">
+        <span class="lanename">Guest</span>
+        <span class="rungs" id="rungsGuest" aria-hidden="true"></span>
+        <span class="lanect" id="ctGuest"></span>
+      </span>
+      <span class="lanebody">
+        <span class="lanecta">Continue as guest <span class="arw" aria-hidden="true">&rsaquo;</span></span>
+        <span class="lanenote">Everything stays on this device.</span>
+      </span>
+    </button>
+
+    <div class="hint" id="welcomeHint">Accounts are created by an administrator.</div>
   </div>
 </section>
 <section id="screen-home" class="screen">
