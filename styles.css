@@ -180,6 +180,26 @@
 .welcome .welcomeUser{ font-family:'Barlow Condensed',sans-serif; font-weight:700; color:var(--ink); font-size:16px; }
 #screen-welcome{ --accent: var(--brand); }
 
+/* ---- Light auth theme -------------------------------------------------
+   Scoped token override, toggled by showScreen() in app.js. The welcome
+   screen is the only light surface in the app; everything else keeps the
+   dark :root values. Do not move these into :root. ---- */
+body.auth-light{
+  --bg:#ffffff;
+  --ink:#101322;
+  --dim:#6b7280;
+  --line:#e3e5ea;
+  --panel:#ffffff;
+  --panel2:#f6f7f9;
+  --auth-cta:#101322;
+  --auth-cta-ink:#ffffff;
+  --auth-focus:#6f9b16;
+  background:#ffffff;
+  color:var(--ink);
+}
+/* Kill the dark page gradient and the film-grain overlay. */
+body.auth-light::after{ display:none; }
+
 /* ---- Welcome / sign-in lanes ------------------------------------------
    Two paths, each headed by a rung strip: one rung per catalog workout,
    lit for the ones that path unlocks. The strip is filled from JS

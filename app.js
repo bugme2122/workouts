@@ -642,6 +642,12 @@ function showScreen(name) {
   activeScreen = name;
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + name).classList.add("active");
+  // The welcome screen is the app's one light surface (see body.auth-light in
+  // styles.css). Toggled here so it can never desync from the visible screen.
+  const light = name === "welcome";
+  document.body.classList.toggle("auth-light", light);
+  const tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) tc.setAttribute("content", light ? "#ffffff" : "#0b0c0e");
 }
 
 const GUEST_FREE = 2;   // guests can use the first N workouts; the rest need sign-in
