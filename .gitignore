@@ -1,2 +1,7 @@
 .superpowers/
 node_modules/
+
+# Secrets — never commit. server/.gitignore covers server/.env; this covers the root one.
+.env
+.env.local
+.env.*.local

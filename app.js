@@ -5,6 +5,7 @@ import {
 import {
   blockLenOf, blocksFor, buildPhases, migrate, sanitize,
   clampPeople, occupants, setDefaults, secondCue,
+  validateRegimen, sanitizeRegimen, buildRegimenPhases, REGIMEN_SCHEMA,
 } from "./engine.js";
 import * as store from "./store.js";
 import * as auth from "./auth.js";
@@ -28,7 +29,12 @@ function persist(){
   cloudSaveConfig(config);
 }
 function getPresets(){ return store.local.loadPresets(); }
-function setPresets(o){ store.local.savePresets(o); cloudSavePresets(o); }
+function setPresets(o){ store.local.savePresets(o); cloudSavePresets(store.mergePresets(o, getRegimenPresets())); }
+// BYOW persistence (PR-1/PR-2/PR-3): the active regimen and regimen presets, namespaced away
+// from ladder presets. Guests persist to localStorage; signed-in users ride the same cloud doc.
+function persistRegimen(){ store.local.saveRegimen(activeRegimen); }
+function getRegimenPresets(){ return store.local.loadRegimenPresets(); }
+function setRegimenPresets(o){ store.local.saveRegimenPresets(o); cloudSavePresets(store.mergePresets(getPresets(), o)); }
 
 let cloud=null, authUser=null, _cfgSaveT=null;
 let _authInited=false;
@@ -64,11 +70,19 @@ async function onAuthChange(u){
         try{ await cloud.saveConfig(cfg); }catch(e){}
         if(idle){ config=cfg; applyTheme(config.theme); build(); setupView(); reset(); }
       }
-      // presets: cloud-wins, else upload local
+      // presets: cloud-wins, else upload local. The one cloud document carries both ladder
+      // presets and the namespaced regimen presets, so split/merge around the transfer.
       try{
         const cp=await cloud.loadPresets();
-        if(cp && Object.keys(cp).length){ store.local.savePresets(cp); }
-        else { const lp=store.local.loadPresets(); if(Object.keys(lp).length) await cloud.savePresets(lp); }
+        if(cp && Object.keys(cp).length){
+          const { ladder, regimens } = store.splitPresets(cp);
+          store.local.savePresets(ladder);
+          store.local.saveRegimenPresets(regimens);
+        } else {
+          const lp=store.local.loadPresets(), lr=store.local.loadRegimenPresets();
+          const merged=store.mergePresets(lp, lr);
+          if(Object.keys(merged).length) await cloud.savePresets(merged);
+        }
       }catch(e){}
     }catch(e){ /* keep local config on any cloud error */ }
   } else {
@@ -88,12 +102,42 @@ let phases=[], cum=[], WORKOUT_TOTAL=0, N=0, LADN=0, TOTBLOCKS=0;
 // per-frame ring/countdown). Recomputed only when the config changes, so render()'s
 // list renderers can cheaply detect "nothing changed" and skip a full DOM rebuild.
 let _contentSig = "";
+// BYOW: which phase source is live. "ladder" = the circuit engine (buildPhases); "regimen" = an
+// uploaded regimen@1 (buildRegimenPhases). Both emit the same {phases,cum,total} shape, so the
+// clock (loop/start/reset/secondCue) runs either one unchanged — only the *views* differ.
+let activeKind = "ladder", activeRegimen = null;
 function build(){
+  if (activeKind === "regimen" && activeRegimen) {
+    const r = buildRegimenPhases(activeRegimen);
+    phases = r.phases; cum = r.cum; WORKOUT_TOTAL = r.total;
+    N = 0; LADN = 0; TOTBLOCKS = 0;
+    _contentSig = JSON.stringify(["regimen", activeRegimen.name, phases.length]);
+    return;
+  }
   const r = buildPhases(config);
   phases = r.phases; cum = r.cum; WORKOUT_TOTAL = r.total;
   N = r.N; LADN = r.LADN; TOTBLOCKS = r.TOTBLOCKS;
   _contentSig = JSON.stringify([config.people, config.stations, config.personNames]);
 }
+
+// Adopt an uploaded regimen as the live workout. Seeds the run's knobs from defaults (theme only
+// when it names a known THEMES key, per UR-4/SR-3), then rebuilds phases through the normal path.
+function adoptRegimen(regimen){
+  activeRegimen = sanitizeRegimen(regimen);
+  activeKind = "regimen";
+  // Only the knobs the shared clock/audio actually read at runtime. `prep` is deliberately NOT
+  // copied — buildRegimenPhases takes it from the regimen's own defaults, and writing it here
+  // would leak the regimen's lead-in into the user's saved ladder config.
+  const d = activeRegimen.defaults || {};
+  config.voice = d.voice;
+  config.halfChime = d.halfChime;
+  config.volume = d.volume;
+  if (d.theme && THEMES[d.theme]) config.theme = d.theme;
+  applyTheme(config.theme);
+  persistRegimen();
+}
+// Return to the ladder circuit as the phase source.
+function adoptLadder(){ activeKind = "ladder"; activeRegimen = null; }
 
 // ---------- audio / voice / haptics ----------
 let actx=null;
@@ -136,6 +180,15 @@ function accentVar(p,rot){ if(finished) return "var(--work)"; if(p.type==="prep"
 
 function renderDots(){ let h=""; for(let i=0;i<LADN;i++) h+="<i></i>"; elDots.innerHTML=h; }
 function setupView(){
+  const reg = activeKind === "regimen";
+  // Regimen mode is a single shared track: no ladder dots, no per-person legend (v1 decision 2).
+  document.getElementById("screen-live").classList.toggle("regimen-mode", reg);
+  if (reg) {
+    elLad.textContent = (phases.length - 1) + " segments";
+    elDots.innerHTML = "";
+    const lg = document.getElementById("legend"); if (lg) lg.innerHTML = "";
+    return;
+  }
   elLad.textContent = config.ladder.map(x=>x[0]).join("·")+"s";
   renderDots();
   renderLegend();
@@ -209,8 +262,49 @@ function renderLegend() {
   el.innerHTML = h;
 }
 
+// BYOW live view (UR-3 option A): current segment label, big countdown, and "up next".
+// Deliberately separate from the ladder view — a regimen has no stations, people, or rotation,
+// so reusing renderPersonCards/renderBigCircuit would mean faking station-shaped data.
+function renderRegimenView(p){
+  const secLeft = finished?0:Math.ceil(remaining/1000);
+  document.documentElement.style.setProperty("--accent", accentVar(p,false));
+  elNum.textContent = finished?"✓":secLeft;
+
+  const segNo = idx;                       // phases[0] is prep, so idx doubles as the segment number
+  const segTot = phases.length - 1;
+  if(finished){ elPhase.textContent="Complete"; elIv.textContent="nice work"; }
+  else if(p.type==="prep"){ elPhase.textContent=running?"Get ready":"Tap to start"; elIv.textContent=segTot+" segments · "+fmt(WORKOUT_TOTAL); }
+  else {
+    elPhase.textContent = p.label || (p.type==="work"?"Work":"Rest");
+    elIv.textContent = "segment "+segNo+" of "+segTot;
+  }
+
+  const denom = p.dur*1000;
+  const frac = (finished||denom<=0)?0:Math.max(0,Math.min(1,remaining/denom));
+  elRing.setAttribute("stroke-dashoffset",(RING_C*(1-frac)).toFixed(1));
+  elTcard.classList.toggle("urgent", !finished&&running&&(p.type==="work"||p.type==="rest")&&secLeft<=3);
+  elRot.classList.remove("show");
+
+  // "Up next" — user strings via textContent only (SR-4).
+  const host = document.getElementById("regimenNext");
+  if(host){
+    const nx = phases[idx+1];
+    host.textContent = (finished||!nx) ? "" : "Next: " + (nx.label || (nx.type==="work"?"Work":"Rest")) + " · " + nx.dur + "s";
+  }
+
+  const elapsed = cum[idx] + (p.type==="prep"?0:(p.dur - remaining/1000));
+  const e = finished?WORKOUT_TOTAL:Math.max(0,Math.min(WORKOUT_TOTAL,elapsed));
+  elElap.textContent=fmt(e);
+  elTot.textContent= finished?"Done":fmt(WORKOUT_TOTAL-e);
+  elProg.style.width=(100*e/(WORKOUT_TOTAL||1)).toFixed(1)+"%";
+  elBlk.textContent=(p.type==="prep"&&!finished)?("— / "+segTot):(segNo+" / "+segTot);
+
+  btnStart.textContent = finished?"Restart":(running?"Pause":(idx===0&&Math.abs(remaining-phases[0].dur*1000)<1?"Start":"Resume"));
+}
+
 function render(){
   const p=phases[idx]; if(!p) return;
+  if(activeKind==="regimen") return renderRegimenView(p);
   let disp = (p.block!==undefined)?p.block:0, rot=false;
   if(p.type==="rest" && p.iv===LADN-1 && p.block<TOTBLOCKS-1){ disp=p.block+1; rot=true; }
   document.documentElement.style.setProperty("--accent", accentVar(p,rot));
@@ -249,6 +343,15 @@ function render(){
 }
 
 function enterPhase(p,firstWorkOfBlock){
+  // BYOW (FR-9): a regimen segment announces its own `say` (falling back to `label`, then the
+  // type word). Sounds/haptics are the ladder ones, reused verbatim.
+  if(activeKind==="regimen"){
+    if(p.type==="work"){ sWork(); buzz([50,40,80]); }
+    else if(p.type==="rest"){ sRest(); buzz([120]); }
+    else return;
+    say(p.say || p.label || (p.type==="work"?"Work":"Rest"));
+    return;
+  }
   if(p.type==="work"){ sWork(); buzz([50,40,80]);
     if(p.block===0&&p.iv===0){ say("Go"); }
     else if(config.people===1&&firstWorkOfBlock){ const st=occupants(p.block,1,N)[0].station; say(config.stations[st].ex); }
@@ -265,7 +368,10 @@ function loop(){
     const cue=secondCue(p, secLeft);
     if(cue.beep) sTick();
     if(cue.speak) say(cue.speak);
-    if(cue.chime && config.halfChime) say("Halfway");
+    // Per-segment halfway override (FR-8): a regimen segment may set halfway:false/true;
+    // otherwise fall back to the global setting.
+    const wantChime = (typeof p.halfway === "boolean") ? p.halfway : config.halfChime;
+    if(cue.chime && wantChime) say("Halfway");
   }
   while(remaining<=0){
     const leftover=remaining; idx++;
@@ -289,6 +395,14 @@ function reset(){ running=false; finished=false; if(rafId) cancelAnimationFrame(
 function showComplete() {
   const card = $("doneCard");
   const sum = $("doneSum");
+  if (activeKind === "regimen") {
+    sum.innerHTML =
+      "<b>" + fmt(WORKOUT_TOTAL) + "</b> total · <b>" + (phases.length - 1) + "</b> segments · " +
+      esc(activeRegimen ? activeRegimen.name : "Workout");
+    card.hidden = false;
+    elTcard.style.display = "none";
+    return;
+  }
   const who = config.people === 1 ? "solo" : (config.people + " people");
   sum.innerHTML =
     "<b>" + fmt(WORKOUT_TOTAL) + "</b> total · <b>" + TOTBLOCKS + "</b> blocks · <b>" +
@@ -317,6 +431,7 @@ function fillSettings(){
   $("volInput").value=Math.round(draft.volume*100);
   document.querySelectorAll(".sw-toggle").forEach(t=>{ t.classList.toggle("on", !!draft[t.dataset.tog]); });
   renderThemes(); renderLengthSeg(); renderLadderSeg(); renderStationRows(); renderLadderRows(); renderPresets(); updateLenHint();
+  byowClearError(); renderByowActive();
   $("linkOut").classList.remove("show");
 }
 function lenSummary(c){
@@ -402,8 +517,110 @@ $("addInterval").onclick=()=>{ const lastp=draft.ladder[draft.ladder.length-1]||
 $("prepInput").oninput=e=>draft.prep=parseInt(e.target.value)||0;
 $("volInput").oninput=e=>draft.volume=(parseInt(e.target.value)||0)/100;
 document.querySelectorAll(".sw-toggle").forEach(t=>{ t.onclick=()=>{ draft[t.dataset.tog]=!draft[t.dataset.tog]; t.classList.toggle("on",draft[t.dataset.tog]); }; });
-$("savePreset").onclick=()=>{ const nm=($("presetName").value||"").trim(); if(!nm) return; const o=getPresets(); o[nm]=sanitize(clone(draft)); setPresets(o); $("presetName").value=""; renderPresets(); };
+$("savePreset").onclick=()=>{ const nm=($("presetName").value||"").trim(); if(!nm) return;
+  // Guard the reserved namespace so a ladder preset can never shadow the regimen bucket.
+  if(nm===store.REGIMEN_NS){ return; }
+  const o=getPresets(); o[nm]=sanitize(clone(draft)); setPresets(o); $("presetName").value=""; renderPresets(); };
 $("resetDefault").onclick=()=>{ draft=clone(DEFAULT); applyTheme(draft.theme); fillSettings(); };
+
+// ---------- BYOW: import / preview / adopt / export / presets ----------
+// The uploaded file is untrusted: guarded JSON.parse -> validateRegimen -> sanitizeRegimen,
+// and every user string reaches the DOM via textContent (SR-4). Nothing is adopted until the
+// user confirms in the preview (UR-2); a rejection leaves the current workout untouched (SR-6).
+let byowPending = null;
+
+function byowError(msg){
+  const e=$("byowErr"); e.textContent=msg; e.hidden=false;
+  $("byowPrev").hidden=true; byowPending=null;
+}
+function byowClearError(){ $("byowErr").hidden=true; $("byowErr").textContent=""; }
+
+// Total seconds + flattened segment count of a sanitized regimen, for the preview card.
+function byowSummary(r){
+  const built=buildRegimenPhases(r);
+  const rounds=r.segments.reduce((n,s)=>n+(s.type==="group"?s.rounds:0),0);
+  return { segments: built.phases.length-1, total: built.total, rounds };
+}
+
+function byowIngest(text){
+  byowClearError();
+  let obj;
+  try{ obj=JSON.parse(text); }
+  catch(e){ return byowError("That file isn't valid JSON."); }
+  const v=validateRegimen(obj);
+  if(!v.ok) return byowError(v.error);
+  const r=sanitizeRegimen(v.regimen);
+  byowPending=r;
+  const s=byowSummary(r);
+  $("byowPrevTitle").textContent=r.name;
+  $("byowPrevMeta").textContent =
+    s.segments+" segments · "+fmt(s.total)+" total"+(s.rounds?(" · "+s.rounds+" repeated rounds"):"");
+  $("byowPrev").hidden=false;
+}
+
+function byowReadFile(file){
+  if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=>byowIngest(String(fr.result||""));
+  fr.onerror=()=>byowError("Couldn't read that file.");
+  fr.readAsText(file);
+}
+
+// Reflect the active regimen (name + preset/export controls) in the sheet.
+function renderByowActive(){
+  const on = activeKind==="regimen" && !!activeRegimen;
+  $("byowActive").hidden=!on;
+  if(on) $("byowActiveLab").textContent='Running: "'+activeRegimen.name+'"';
+  renderByowPresets();
+}
+
+function renderByowPresets(){
+  const L=$("byowPresetList"); if(!L) return;
+  const ps=getRegimenPresets(); L.innerHTML="";
+  Object.keys(ps).forEach(n=>{
+    const d=document.createElement("div");
+    d.className="presetrow";
+    d.innerHTML='<span class="pn"></span><button class="minibtn load" style="width:auto;padding:0 10px">Load</button>'+
+                '<button class="minibtn del" style="width:auto;padding:0 10px">Delete</button>';
+    d.querySelector(".pn").textContent=n;            // user string -> textContent (SR-4)
+    d.querySelector(".load").onclick=()=>{ byowAdopt(sanitizeRegimen(ps[n])); };
+    d.querySelector(".del").onclick=()=>{ const o=getRegimenPresets(); delete o[n]; setRegimenPresets(o); renderByowPresets(); };
+    L.appendChild(d);
+  });
+}
+
+// Adopt a regimen as the live workout and rebuild through the normal path.
+function byowAdopt(r){
+  adoptRegimen(r);
+  build(); setupView(); reset();
+  byowPending=null; $("byowPrev").hidden=true; $("byowPaste").value="";
+  renderByowActive();
+  closeSettings(); showScreen("live"); ensureAudio();
+}
+
+$("byowPick").onclick=()=>$("byowFile").click();
+$("byowFile").onchange=e=>{ byowReadFile(e.target.files&&e.target.files[0]); e.target.value=""; };
+$("byowLoadPaste").onclick=()=>{ const t=($("byowPaste").value||"").trim(); if(!t) return byowError("Paste some JSON first."); byowIngest(t); };
+$("byowCancel").onclick=()=>{ byowPending=null; $("byowPrev").hidden=true; byowClearError(); };
+$("byowUse").onclick=()=>{ if(byowPending) byowAdopt(byowPending); };
+$("byowBackToLadder").onclick=()=>{ adoptLadder(); persistRegimen(); build(); setupView(); reset(); renderByowActive(); };
+$("byowSavePreset").onclick=()=>{
+  const nm=($("byowPresetName").value||"").trim();
+  if(!nm||!activeRegimen) return;
+  const o=getRegimenPresets(); o[nm]=activeRegimen; setRegimenPresets(o);
+  $("byowPresetName").value=""; renderByowPresets();
+};
+// FR-12: export the active regimen as a .json file (the upload/edit/re-upload loop).
+$("byowExport").onclick=()=>{
+  if(!activeRegimen) return;
+  const blob=new Blob([JSON.stringify(activeRegimen,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=(activeRegimen.name||"workout").replace(/[^a-z0-9._-]+/gi,"-").toLowerCase()+".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
 $("copyLink").onclick=()=>{ const link=location.origin+location.pathname+"#"+encShare(sanitize(clone(draft)));
   const out=$("linkOut"); out.textContent=link; out.classList.add("show");
   try{ navigator.clipboard.writeText(link).then(()=>{ $("copyLink").textContent="✓ Link copied"; setTimeout(()=>{$("copyLink").innerHTML="&#128279; Copy shareable link";},1600); }); }catch(e){}
@@ -535,6 +752,12 @@ const freshShare = bootedFromShare && !store.local.loadConfig();
 if (bootedFromShare && !freshShare) {
   try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
 }
+// BYOW: restore a previously adopted regimen so it survives a reload. A `#w=`/`#c=` share link
+// explicitly asks for a ladder workout, so it wins over the saved regimen.
+if (!bootedFromShare) {
+  const savedRegimen = store.local.loadRegimen();
+  if (savedRegimen) { activeRegimen = sanitizeRegimen(savedRegimen); activeKind = "regimen"; }
+}
 applyTheme(config.theme);
 // Note: the catalog is rendered by updateAccountUI(null) at the end of boot, so no
 // separate renderCatalog() call is needed here (it would be a redundant double render).
@@ -570,7 +793,9 @@ if(loginForm) loginForm.addEventListener("submit", async (ev) => {
   }
 });
 
-function startLive() { build(); setupView(); reset(); showScreen("live"); ensureAudio(); }
+// Entering live from the catalog/customize always means the ladder circuit — leaving a
+// previously adopted regimen behind (it stays saved under its own key).
+function startLive() { adoptLadder(); persistRegimen(); build(); setupView(); reset(); showScreen("live"); ensureAudio(); }
 
 function updateIdChips(u){
   const chips = document.querySelectorAll(".idchip");

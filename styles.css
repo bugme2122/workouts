@@ -274,6 +274,25 @@
   .linkout.show{display:block}
   .hint{font-size:11px;color:var(--dim);font-family:'Barlow',sans-serif}
 
+  /* ---- BYOW: import controls, preview card, and the regimen live view ---- */
+  .byowErr{font-size:12px;font-family:'Barlow',sans-serif;color:#ff6b6b;
+    background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.35);border-radius:9px;padding:8px 10px}
+  .byowErr[hidden]{display:none}
+  .byowPrev{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px;display:flex;flex-direction:column;gap:7px}
+  .byowPrev[hidden]{display:none}
+  .byowPrevTitle{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.04em;font-size:16px}
+  .byowPrevMeta{font-size:11px;color:var(--dim);font-family:'Barlow',sans-serif}
+  .byowPrevBtns{display:flex;gap:7px}
+  /* "Up next" line under the timer — only visible while a regimen is running. */
+  .regnext{font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.06em;
+    text-transform:uppercase;font-size:13px;color:var(--dim);text-align:center;min-height:16px;display:none}
+  #screen-live.regimen-mode .regnext{display:block}
+  /* A regimen is a single shared track: no stations, people, rotation or ladder dots. */
+  #screen-live.regimen-mode #personCards,
+  #screen-live.regimen-mode #bigCircuit,
+  #screen-live.regimen-mode .plegend,
+  #screen-live.regimen-mode #dots{display:none}
+
 /* =========================================================================
    Task 9 — Big-screen (landscape) color-coded circuit + person legend.
    Left column = full station list (#bigCircuit); right column reuses the

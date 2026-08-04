@@ -120,3 +120,17 @@ test("a regimen phase >=12s fires the halfway chime via secondCue", () => {
   const cue = secondCue(work, Math.round(work.dur / 2));
   assert.equal(cue.chime, true);
 });
+
+// ---------- TR-4: export → parse → build round-trips to an equivalent phase list ----------
+test("exporting and re-importing a regimen yields an equivalent phase list", () => {
+  const original = sanitizeRegimen(valid());
+  const before = buildRegimenPhases(original);
+  // The export path is exactly this serialization (app.js writes it to a Blob).
+  const roundTripped = JSON.parse(JSON.stringify(original));
+  const v = validateRegimen(roundTripped);
+  assert.equal(v.ok, true);
+  const after = buildRegimenPhases(sanitizeRegimen(v.regimen));
+  assert.deepEqual(after.phases, before.phases);
+  assert.deepEqual(after.cum, before.cum);
+  assert.equal(after.total, before.total);
+});

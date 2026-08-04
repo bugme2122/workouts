@@ -145,6 +145,8 @@
 
   <div class="pair" id="personCards"></div>
 
+  <div class="regnext" id="regimenNext"></div>
+
   <div class="controls">
     <button class="main" id="startbtn">Start</button>
     <button class="ghost" id="resetbtn">Reset</button>
@@ -216,6 +218,32 @@
       <div class="linkout" id="linkOut"></div>
       <button class="addbtn" id="resetDefault">Reset to default workout</button>
       <div class="hint" id="saveHint">Saved presets live on this device. The shareable link works anywhere &mdash; text it to your partner.</div>
+    </div>
+    <div class="sec"><div class="lab">Bring your own workout</div>
+      <button class="addbtn" id="byowPick">&#128194; Import a workout (.json)</button>
+      <input type="file" id="byowFile" accept="application/json,.json" hidden>
+      <textarea class="fld" id="byowPaste" rows="3" placeholder="&hellip;or paste regimen@1 JSON here" style="height:auto;padding:9px 11px;resize:vertical"></textarea>
+      <button class="minibtn" id="byowLoadPaste" style="width:auto;padding:0 12px">Load pasted JSON</button>
+      <div class="byowErr" id="byowErr" hidden></div>
+      <div class="byowPrev" id="byowPrev" hidden>
+        <div class="byowPrevTitle" id="byowPrevTitle"></div>
+        <div class="byowPrevMeta" id="byowPrevMeta"></div>
+        <div class="byowPrevBtns">
+          <button class="minibtn" id="byowUse" style="width:auto;padding:0 12px">Use this workout</button>
+          <button class="minibtn" id="byowCancel" style="width:auto;padding:0 12px">Cancel</button>
+        </div>
+      </div>
+      <div id="byowActive" hidden>
+        <div class="hint" id="byowActiveLab"></div>
+        <div class="presetrow" style="background:transparent;border:none;padding:0">
+          <input class="fld" id="byowPresetName" placeholder="Name this regimen">
+          <button class="minibtn" id="byowSavePreset" style="width:auto;padding:0 12px">Save</button>
+        </div>
+        <button class="addbtn" id="byowExport">&#11015; Download .json</button>
+        <button class="addbtn" id="byowBackToLadder">&#8617; Back to the circuit workout</button>
+      </div>
+      <div id="byowPresetList" style="display:flex;flex-direction:column;gap:7px"></div>
+      <div class="hint">Upload a <b>regimen@1</b> JSON file &mdash; an ordered list of timed segments. It runs on this same timer, with the same countdown, voice cues and halfway chime.</div>
     </div>
 
     <button class="main" id="applyBtn">Save &amp; Close</button>
