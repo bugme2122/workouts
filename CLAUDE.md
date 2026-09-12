@@ -2,22 +2,22 @@
 
 Vanilla-JS interval-timer web app with a buildless client and an Express 5 + MongoDB API
 (email/password JWT accounts, per-user cloud sync).
-**Architecture & narrative:** see `PROJECT.md`. **Known issues (severity-ordered, with scoped fixes):** see `GAPS.md`.
+**Architecture & narrative:** see `PROJECT.md`. **Audit ledger (every past weakness and how it was closed):** see `GAPS.md`.
 
 ## Commands
 
 ```sh
-npm test                      # client: node --test tests/*.test.mjs   (65 tests, all must pass)
+npm test                      # client: node --test tests/*.test.mjs   (86 tests, all must pass)
 npm run test:watch            # client watch mode
-npm start                     # python -m http.server 8000  (client only, no API)
+npm start                     # npx http-server on :8000  (client only, no API)
 
 cd server && npm run dev:local # WHOLE STACK on :4000 — Express + embedded MongoDB, seeds an admin
-cd server && npx vitest run    # server: 29 tests, all must pass
+cd server && npx vitest run    # server: 32 tests, all must pass
 cd server && npm run create-admin  # provision a user (there is no self-registration)
 ```
 
-- **Both suites must be green before any change is claimed done.** Client `npm test` (65) and
-  server `npx vitest run` (29).
+- **Both suites must be green before any change is claimed done.** Client `npm test` (86) and
+  server `npx vitest run` (32). CI (`.github/workflows/test.yml`) runs both on push and PR.
 - The **client** is buildless with **zero npm dependencies** — do not add client-side packages.
   The **server** (`server/`) uses Express 5 + Mongoose 8 and has its own `package.json`; deps go
   there. `server/scripts/build-client.mjs` only *copies* client files into `server/public` and
@@ -45,11 +45,13 @@ cd server && npm run create-admin  # provision a user (there is no self-registra
   engine.js (or extract from app.js) to make it testable.
 - Style: compact vanilla JS, `const $ = id => document.getElementById(id)`, string-built
   `innerHTML` with the local `esc()` helper. **Every dynamic value interpolated into HTML must go
-  through `esc()`**, and generated attributes must use double quotes (`esc()` doesn't escape single quotes).
-- Errors: cloud/auth failures degrade silently to local-only (by design, though see GAPS #6);
-  never let an API error break the timer.
-- CSS: edit `styles.css` only. `design-tokens.css` is NOT linked in index.html — it's historical;
-  don't edit it expecting visual changes.
+  through `esc()`**; `esc()` escapes both quote styles, but double-quoted attributes stay the convention.
+- Errors: cloud/auth failures degrade to local-only by design — never let an API error break the
+  timer — but they are no longer silent: route every cloud catch through `noteSync()` in app.js,
+  which console.warns and drives the sync dot on the identity chip.
+- CSS: `styles.css` is the only stylesheet and the single source of truth for tokens (the unlinked
+  `design-tokens.css` was deleted). Destructive confirmations use `askConfirm()` + `#confirmBox`,
+  never the native `confirm()`.
 
 ## The rules (violate none of these casually)
 
@@ -74,7 +76,21 @@ cd server && npm run create-admin  # provision a user (there is no self-registra
 7. **The server must not trust the client's sanitize.** Anything written through the API is
    re-validated server-side; every collection is scoped by `userId` and every query filters on the
    JWT's user. No cross-user reads.
-8. **Run both suites before claiming any change done.** 65 client + 29 server, all green.
+8. **Run both suites before claiming any change done.** 86 client + 32 server, all green.
+
+## Pure seams to prefer (added 2026-09-12)
+
+`app.js` is untested, so new decision logic goes in `engine.js` and gets a test. Already there and
+already used by app.js — use them rather than re-deriving the logic inline:
+
+- `decideBoot(hash, hasLocal)` — what a URL hash means for the boot screen, the config source, and
+  whether to clear the hash. A share hash is honored **only** for a genuine recipient.
+- `isIdle({ activeScreen, running, freshShare })` — the one gate for swapping the live config out
+  from under the user (cloud sign-in sync and cross-tab `storage` sync both use it).
+- `advancePhases(phases, idx, remaining)` — the leftover-carrying phase advance, used by both the
+  rAF loop and the `visibilitychange` handler. Announce only the phase landed on, never `skipped`.
+- `store.decideMigration(local, cloud, { localAt, cloudAt })` is newest-wins when both sides are
+  stamped, and `store.mergePresetMaps()` merges presets — never replace a preset map wholesale.
 
 ## Gotchas
 
@@ -106,7 +122,7 @@ cd server && npm run create-admin  # provision a user (there is no self-registra
   is ignored in a `<meta>` CSP (which is why `framebust.js` exists), and the `data:` web-app
   manifest is blocked by `default-src 'self'`. Don't chase them as regressions.
 - **Docs in `docs/superpowers/` are point-in-time specs/plans** — some describe superseded behavior
-  (e.g. the Firebase-era accounts spec). Trust code over docs. `prompt.md` in the root is an
+  (e.g. the Firebase-era accounts spec). Trust code over docs. `docs/agents/prompt.md` is an
   agent-pipeline prompt template, not app docs.
 - **`archive/firebase-era` (tag)** marks the last Firebase-era commit, if you need to see how
   Google auth / Firestore worked before the migration.

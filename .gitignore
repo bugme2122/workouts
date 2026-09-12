@@ -5,3 +5,10 @@ node_modules/
 .env
 .env.local
 .env.*.local
+
+# Scratch / reference assets that don't belong in the repo (GAPS #4).
+image.png
+/ScottPlan-*.md
+
+# Playwright MCP scratch output
+.playwright-mcp/

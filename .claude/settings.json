@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "jq -r '.tool_input.command' | grep -q 'git commit' && { git diff --cached --name-only --diff-filter=ACM | while read f; do if git show :\"$f\" 2>/dev/null | grep -iE '(apiKey|AKIA[0-9A-Z]{16}|password|token|-----BEGIN.*PRIVATE KEY)' >/dev/null 2>&1; then echo '{\"systemMessage\":\"⚠️ Potential secret detected in staged files. Use git commit --no-verify to bypass (not recommended).\",\"continue\":false,\"stopReason\":\"Secret pattern detected\"}' | jq -r '.'; exit 1; fi; done; } || true",
+            "statusMessage": "Scanning for secrets..."
+          }
+        ]
+      }
+    ]
+  }
+}
