@@ -277,6 +277,18 @@
   <button class="ambtn danger" id="amDelete">Delete my cloud data</button>
 </div>
 
+<!-- In-app confirm (GAPS #15): replaces the blocking native confirm() for destructive actions. -->
+<div class="confirmwrap" id="confirmBox" hidden>
+  <div class="confirmcard" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="ctitle" id="confirmTitle"></div>
+    <div class="cbody" id="confirmBody"></div>
+    <div class="crow">
+      <button class="ambtn" id="confirmCancel">Cancel</button>
+      <button class="ambtn danger" id="confirmOk">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="./app.js"></script>
 </body>
 </html>

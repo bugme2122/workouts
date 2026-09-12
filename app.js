@@ -4,22 +4,34 @@ import {
 } from "./catalog.js";
 import {
   blockLenOf, blocksFor, buildPhases, migrate, sanitize,
-  clampPeople, occupants, setDefaults, secondCue,
+  clampPeople, occupants, setDefaults, secondCue, decideBoot, isIdle, advancePhases,
   validateRegimen, sanitizeRegimen, buildRegimenPhases, REGIMEN_SCHEMA,
   guestAccessLabel,
 } from "./engine.js";
 import * as store from "./store.js";
 import * as auth from "./auth.js";
 
-setDefaults({ people: DEFAULT.people, prep: DEFAULT.prep, theme: DEFAULT.theme, volume: DEFAULT.volume, targetMin: DEFAULT.targetMin, voice: DEFAULT.voice, ticks: DEFAULT.ticks, halfChime: DEFAULT.halfChime });
+// Engine fallbacks come from the catalog's DEFAULT so the two can't drift (GAPS #10 -- a missing
+// keepAwake used to read as undefined and let the screen sleep mid-workout).
+setDefaults({ people: DEFAULT.people, prep: DEFAULT.prep, theme: DEFAULT.theme, volume: DEFAULT.volume, targetMin: DEFAULT.targetMin, voice: DEFAULT.voice, ticks: DEFAULT.ticks, halfChime: DEFAULT.halfChime, haptics: DEFAULT.haptics, keepAwake: DEFAULT.keepAwake });
 
 const $ = id => document.getElementById(id);
 const clone = o => JSON.parse(JSON.stringify(o));
 
+// ---------- boot decision ----------
+// Pure and unit-tested in engine.js (decideBoot). Computed before loadConfig() because it decides
+// WHERE the config comes from: a share hash is honored only for a genuine recipient (no local
+// state). For a returning user the hash is stale, and reading it into `config` anyway used to let
+// the next persist() overwrite their own saved workout (GAPS #5).
+const boot = decideBoot(location.hash, !!store.local.loadConfig());
+const bootedFromShare = boot.bootedFromShare, freshShare = boot.freshShare;
+
 // ---------- config persistence ----------
 function loadConfig(){
-  const body=(location.hash||"").replace(/^#/,"");
-  if(body.startsWith("w=")||body.startsWith("c=")){ const c=decShare(body); if(c) return sanitize(migrate(c)); }
+  if(boot.configSource === "share"){
+    const body=(location.hash||"").replace(/^#/,"");
+    const c=decShare(body); if(c) return sanitize(migrate(c));
+  }
   const c=store.local.loadConfig(); if(c) return sanitize(migrate(c));
   return sanitize(clone(DEFAULT));
 }
@@ -40,12 +52,32 @@ function setRegimenPresets(o){ store.local.saveRegimenPresets(o); cloudSavePrese
 let cloud=null, authUser=null, _cfgSaveT=null;
 let _authInited=false;
 let activeScreen="";
+// Sync health, surfaced as a dot on the identity chip (GAPS #6). Cloud failures still degrade to
+// local-only -- the timer never breaks -- but they are no longer invisible to the user or to the
+// console. "ok" = last write succeeded, "err" = it failed, "" = nothing written yet this session.
+let _syncState = "";
+function noteSync(ok, what, e){
+  _syncState = ok ? "ok" : "err";
+  if(!ok) console.warn("cloud " + what + " failed", e);
+  paintSyncDot();
+}
+function paintSyncDot(){
+  document.querySelectorAll(".idchip .syncdot").forEach(d=>{
+    d.className = "syncdot" + (_syncState ? " " + _syncState : "");
+    d.title = _syncState==="err" ? "Last cloud sync failed \u2014 changes are saved on this device"
+            : _syncState==="ok"  ? "Synced" : "";
+  });
+}
 function cloudSaveConfig(c){
   if(!cloud) return;
   clearTimeout(_cfgSaveT);
-  _cfgSaveT=setTimeout(()=>{ if(cloud) cloud.saveConfig(c).catch(()=>{}); }, 1200);
+  _cfgSaveT=setTimeout(()=>{
+    if(cloud) cloud.saveConfig(c).then(()=>noteSync(true,"config")).catch(e=>noteSync(false,"config save",e));
+  }, 1200);
 }
-function cloudSavePresets(o){ if(cloud) cloud.savePresets(o).catch(()=>{}); }
+function cloudSavePresets(o){
+  if(cloud) cloud.savePresets(o).then(()=>noteSync(true,"presets")).catch(e=>noteSync(false,"preset save",e));
+}
 
 async function connectAuth(){
   if(_authInited) return;
@@ -59,35 +91,40 @@ async function onAuthChange(u){
   if(u){
     try{
       cloud = store.cloudBackend();
-      let cloudCfg=null; try{ cloudCfg=await cloud.loadConfig(); }catch(e){}
-      const dec = store.decideMigration(store.local.loadConfig(), cloudCfg);
-      const idle = !freshShare && !running && (activeScreen==="home" || activeScreen==="welcome");
+      let cloudCfg=null, cloudAt=0;
+      try{ const st=await cloud.loadState(); cloudCfg=st.config; cloudAt=st.updatedAt; }
+      catch(e){ noteSync(false,"config load",e); }
+      // Newest-wins, not cloud-always-wins: signing in on a device with fresher local edits must
+      // not silently replace them with a stale cloud snapshot (GAPS #1).
+      const dec = store.decideMigration(store.local.loadConfig(), cloudCfg,
+        { localAt: store.local.configUpdatedAt(), cloudAt });
+      const idle = isIdle({ activeScreen, running, freshShare });
       if(dec.action==="use-cloud"){
         const cfg=sanitize(migrate(dec.config));
         store.local.saveConfig(cfg);                 // always cache the cloud copy locally
         if(idle){ config=cfg; applyTheme(config.theme); build(); setupView(); reset(); }
       } else if(dec.action==="upload-local"){
         const cfg=sanitize(migrate(dec.config));
-        try{ await cloud.saveConfig(cfg); }catch(e){}
+        try{ await cloud.saveConfig(cfg); noteSync(true,"config"); }catch(e){ noteSync(false,"config save",e); }
         if(idle){ config=cfg; applyTheme(config.theme); build(); setupView(); reset(); }
       }
-      // presets: cloud-wins, else upload local. The one cloud document carries both ladder
-      // presets and the namespaced regimen presets, so split/merge around the transfer.
+      // presets: MERGE, never replace. The cloud copy wins on a name collision, but presets made
+      // locally since the last sync survive and are pushed back up (GAPS #1). The one cloud
+      // document carries both ladder presets and the namespaced regimen presets, so split/merge
+      // around the transfer.
       try{
         const cp=await cloud.loadPresets();
-        if(cp && Object.keys(cp).length){
-          const { ladder, regimens } = store.splitPresets(cp);
-          store.local.savePresets(ladder);
-          store.local.saveRegimenPresets(regimens);
-        } else {
-          const lp=store.local.loadPresets(), lr=store.local.loadRegimenPresets();
-          const merged=store.mergePresets(lp, lr);
-          if(Object.keys(merged).length) await cloud.savePresets(merged);
-        }
-      }catch(e){}
-    }catch(e){ /* keep local config on any cloud error */ }
+        const split=store.splitPresets(cp || {});
+        const ladder = store.mergePresetMaps(store.local.loadPresets(), split.ladder);
+        const regimens = store.mergePresetMaps(store.local.loadRegimenPresets(), split.regimens);
+        store.local.savePresets(ladder);
+        store.local.saveRegimenPresets(regimens);
+        const merged=store.mergePresets(ladder, regimens);
+        if(Object.keys(merged).length){ await cloud.savePresets(merged); noteSync(true,"presets"); }
+      }catch(e){ noteSync(false,"preset sync",e); }
+    }catch(e){ noteSync(false,"sync",e); /* keep local config on any cloud error */ }
   } else {
-    clearTimeout(_cfgSaveT); cloud=null;
+    clearTimeout(_cfgSaveT); cloud=null; _syncState="";
     // On an actual sign-out (was signed in), return to the welcome/sign-in screen.
     // Welcome is the app's only light surface; if the settings sheet is open (e.g. sign-out
     // triggered from Account > Sign out inside the sheet) it must be closed first, or its
@@ -160,6 +197,9 @@ const sRest=()=>{tone(420,0,.26,.26,"sine");};
 const sRotate=()=>{tone(523,0,.14,.30);tone(659,.14,.14,.30);tone(880,.28,.34,.34);};
 const sTick=()=>{ if(config.ticks) tone(1568,0,.05,.16,"sine"); };
 const sDone=()=>{[523,659,784,1047].forEach((f,i)=>tone(f,i*.13,.34,.30,"triangle"));};
+// speechSynthesis.cancel() is deliberate and global: a cue must never queue behind a stale one
+// (a backed-up queue would announce "3" during the next interval). It can clip other page/OS
+// utterances, which is the accepted trade for cue timing.
 function say(t){ try{ if(!config.voice||config.volume<=0||!window.speechSynthesis) return; speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.volume=config.volume; u.rate=1.12; u.pitch=1; speechSynthesis.speak(u);}catch(e){} }
 function buzz(p){ try{ if(config.haptics&&navigator.vibrate) navigator.vibrate(p);}catch(e){} }
 
@@ -167,7 +207,20 @@ function buzz(p){ try{ if(config.haptics&&navigator.vibrate) navigator.vibrate(p
 let wake=null;
 async function acquireWake(){ try{ if(config.keepAwake&&"wakeLock" in navigator){ wake=await navigator.wakeLock.request("screen"); } }catch(e){} }
 function releaseWake(){ try{ if(wake){ wake.release(); wake=null; } }catch(e){} }
-document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&running) acquireWake(); });
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible" || !running) return;
+  acquireWake();
+  // rAF was paused while hidden; charge the elapsed wall-clock time and repaint immediately so the
+  // returning user sees the true position instead of a stale frame (GAPS #7).
+  const now=performance.now(); remaining-=(now-last); last=now;
+  if(remaining<=0){
+    const adv=advancePhases(phases, idx, remaining);
+    idx=adv.idx; remaining=adv.remaining; cueSec=null;
+    if(adv.finished){ finished=true; running=false; releaseWake(); sDone(); say("Workout complete"); render(); showComplete(); return; }
+    enterPhase(phases[idx], phases[idx].type==="work"&&phases[idx].iv===0);
+  }
+  render();
+});
 
 // ---------- state ----------
 let idx=0, remaining=0, running=false, finished=false, last=0, cueSec=null, rafId=null;
@@ -378,11 +431,14 @@ function loop(){
     const wantChime = (typeof p.halfway === "boolean") ? p.halfway : config.halfChime;
     if(cue.chime && wantChime) say("Halfway");
   }
-  while(remaining<=0){
-    const leftover=remaining; idx++;
-    if(idx>=phases.length){ finished=true; running=false; idx=phases.length-1; releaseWake(); sDone(); say("Workout complete"); remaining=0; render(); showComplete(); return; }
+  if(remaining<=0){
+    // A hidden tab pauses rAF, so one frame can land many phases later. Wall-clock accounting is
+    // exact, but announcing every phase flown past fired a burst of beeps/speech -- cue only the
+    // phase actually landed on (GAPS #7).
+    const adv=advancePhases(phases, idx, remaining);
+    idx=adv.idx; remaining=adv.remaining; cueSec=null;
+    if(adv.finished){ finished=true; running=false; releaseWake(); sDone(); say("Workout complete"); render(); showComplete(); return; }
     const np=phases[idx]; enterPhase(np, np.type==="work"&&np.iv===0);
-    remaining=np.dur*1000+leftover; cueSec=null;
   }
   render(); rafId=requestAnimationFrame(loop);
 }
@@ -508,11 +564,15 @@ function renderPresets(){ const L=$("presetList"); const ps=getPresets(); L.inne
   if(!names.length){ L.innerHTML='<div class="hint">No saved presets yet.</div>'; return; }
   names.forEach(n=>{ const d=document.createElement("div"); d.className="presetrow";
     d.innerHTML='<span class="pn">'+esc(n)+'</span><button class="minibtn load" style="width:auto;padding:0 12px">Load</button><button class="minibtn del">&times;</button>';
-    d.querySelector(".load").onclick=()=>{ draft=migrate(ps[n]); applyTheme(draft.theme); fillSettings(); };
+    // Presets are semi-trusted (another device, an older schema, a cloud round-trip), so a load
+    // goes through the same trust boundary as every other config source (GAPS #8). Clone first --
+    // migrate/sanitize both mutate their argument, and `ps` is the stored map.
+    d.querySelector(".load").onclick=()=>{ draft=sanitize(migrate(clone(ps[n]))); applyTheme(draft.theme); fillSettings(); };
     d.querySelector(".del").onclick=()=>{ const o=getPresets(); delete o[n]; setPresets(o); renderPresets(); };
     L.appendChild(d); });
 }
-function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+// Escapes both quote styles, so an attribute built with single quotes is safe too (GAPS #15).
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 
 // settings events
 document.querySelectorAll(".gearbtn").forEach(b=>{ b.onclick=openSettings; });
@@ -655,7 +715,11 @@ function showScreen(name) {
   if (tc) tc.setAttribute("content", light ? "#ffffff" : "#0b0c0e");
 }
 
-const GUEST_FREE = 2;   // guests can use the first N workouts; the rest need sign-in
+// Guests can use the first N workouts; the rest show a sign-in nudge.
+// NOTE: this is a NUDGE, NOT SECURITY (GAPS #9). The whole catalog ships to the client in
+// catalog.js, the lock is a CSS class, and decShare() has no lock check -- a `#w=<id>` link opens
+// any workout as a guest. Real gating would require serving catalog content from the API.
+const GUEST_FREE = 2;
 
 // Welcome-screen copy for how much of the catalog the guest path unlocks. Driven
 // from WORKOUTS/GUEST_FREE so it can never drift from what renderCatalog() locks.
@@ -762,12 +826,9 @@ $("custEditTheme").onclick = openCustomizeEditor;
 $("buildOwn").onclick = () => { if(!authUser){ showScreen("welcome"); return; } openCustomize(null); };
 
 // ---------- init ----------
-const bootedFromShare = /^#?[wc]=/.test(location.hash || "");
-// A URL hash deep-links straight to the live workout only for a genuine share
-// recipient (no local state). Otherwise a hash is stale — clear it. EVERY normal
-// load shows the welcome/sign-in gate; no silent auto-login (sign-in is explicit).
-const freshShare = bootedFromShare && !store.local.loadConfig();
-if (bootedFromShare && !freshShare) {
+// `boot` was decided at the top of this file (engine.decideBoot, unit-tested). A stale share hash
+// is cleared; EVERY normal load shows the welcome/sign-in gate -- no silent auto-login.
+if (boot.clearHash) {
   try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
 }
 // BYOW: restore a previously adopted regimen so it survives a reload. A `#w=`/`#c=` share link
@@ -779,11 +840,26 @@ if (!bootedFromShare) {
 applyTheme(config.theme);
 // Note: the catalog is rendered by updateAccountUI(null) at the end of boot, so no
 // separate renderCatalog() call is needed here (it would be a redundant double render).
-if (freshShare) {
+if (boot.screen === "live") {
   showScreen("live"); build(); setupView(); reset();
 } else {
   showScreen("welcome");
 }
+
+// ---------- cross-tab sync (GAPS #12) ----------
+// Two tabs each hold their own in-memory config; without this neither learns about the other's
+// change and the next write silently wins. Adopt a sibling tab's config only while idle -- never
+// mid-workout -- which is the same rule cloud sync uses.
+window.addEventListener("storage", (ev) => {
+  if (ev.key !== "ladder.last" || !ev.newValue) return;
+  if (!isIdle({ activeScreen, running, freshShare })) return;
+  if (activeKind === "regimen") return;
+  try {
+    const incoming = sanitize(migrate(JSON.parse(ev.newValue)));
+    if (JSON.stringify(incoming) === JSON.stringify(config)) return;
+    config = incoming; applyTheme(config.theme); build(); setupView(); reset();
+  } catch (e) { console.warn("cross-tab config reload failed", e); }
+});
 
 document.getElementById("guestBtn").onclick = () => { showScreen("home"); };
 paintGuestCount();
@@ -821,7 +897,8 @@ function updateIdChips(u){
   if(u){
     const first = ((u.firstName || u.email || "Account").trim().split(/\s+/)[0]) || "Account";
     const av = '<span class="av">'+esc((first[0]||"?").toUpperCase())+'</span>';
-    chips.forEach(c=>{ c.innerHTML = av+'<span class="nm">'+esc(first)+'</span>'; c.hidden=false; c.onclick=openAcctMenu; });
+    chips.forEach(c=>{ c.innerHTML = av+'<span class="nm">'+esc(first)+'</span><span class="syncdot"></span>'; c.hidden=false; c.onclick=openAcctMenu; });
+    paintSyncDot();
   } else {
     chips.forEach(c=>{ c.hidden=true; c.onclick=null; });
   }
@@ -840,10 +917,32 @@ function openAcctMenu(e){
 function closeAcctMenu(){ const m=document.getElementById("acctMenu"); if(m) m.hidden=true; }
 // Shared account actions, wired from both the dropdown and the settings panel.
 async function signOut(){ try{ await auth.signOutUser(); }catch(e){} }
+// In-app confirm (GAPS #15): native confirm() blocks the whole page (and any automation) and
+// looks nothing like the rest of the UI. Resolves true/false; Esc or the backdrop cancels.
+function askConfirm(title, body, okLabel){
+  return new Promise(resolve=>{
+    const box=$("confirmBox"); if(!box) return resolve(false);
+    $("confirmTitle").textContent=title;
+    $("confirmBody").textContent=body;
+    $("confirmOk").textContent=okLabel||"Confirm";
+    box.hidden=false;
+    const onKey=(ev)=>{ if(ev.key==="Escape") done(false); };
+    const done=(v)=>{ box.hidden=true; $("confirmOk").onclick=null; $("confirmCancel").onclick=null;
+      box.onclick=null; document.removeEventListener("keydown",onKey); resolve(v); };
+    $("confirmOk").onclick=()=>done(true);
+    $("confirmCancel").onclick=()=>done(false);
+    box.onclick=(ev)=>{ if(ev.target===box) done(false); };
+    document.addEventListener("keydown",onKey);
+    $("confirmCancel").focus();
+  });
+}
 async function deleteCloud(){
-  if(!confirm("Delete your synced workout and presets from the cloud? Your device keeps its local copy.")) return;
+  const yes = await askConfirm("Delete cloud data?",
+    "This removes your synced workout and presets from the cloud. Your device keeps its local copy.",
+    "Delete");
+  if(!yes) return;
   clearTimeout(_cfgSaveT);
-  try{ if(cloud) await cloud.deleteAll(); }catch(e){}
+  try{ if(cloud) await cloud.deleteAll(); }catch(e){ noteSync(false,"delete",e); }
   try{ await auth.signOutUser(); }catch(e){}
 }
 {

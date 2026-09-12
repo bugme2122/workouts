@@ -22,7 +22,6 @@ const FILES = [
   'auth.js',
   'api.js',
   'styles.css',
-  'design-tokens.css',
 ];
 
 fs.rmSync(outDir, { recursive: true, force: true });
