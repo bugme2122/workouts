@@ -31,9 +31,25 @@ export function buildPhases(config) {
   return { phases, cum, total: acc, N, LADN, TOTBLOCKS };
 }
 
+// Share-link codec. The wire format is UTF-8 bytes -> binary string -> base64url, byte-identical
+// to the original escape/unescape implementation, so every `#w=`/`#c=` link already in the wild
+// keeps decoding (tests/sharelinks.test.mjs and engine.test.mjs pin this). Deprecated Annex-B
+// escape/unescape were replaced with TextEncoder/TextDecoder; the bytes did not change.
+function utf8ToBinary(str) {
+  const bytes = new TextEncoder().encode(str);
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+  return out;
+}
+function binaryToUtf8(bin) {
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i) & 0xff;
+  return new TextDecoder().decode(bytes);
+}
+
 export function enc(config) {
   try {
-    return btoa(unescape(encodeURIComponent(JSON.stringify(config))))
+    return btoa(utf8ToBinary(JSON.stringify(config)))
       .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   } catch (e) { return ""; }
 }
@@ -41,7 +57,7 @@ export function enc(config) {
 export function dec(s) {
   try {
     s = s.replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(decodeURIComponent(escape(atob(s))));
+    return JSON.parse(binaryToUtf8(atob(s)));
   } catch (e) { return null; }
 }
 
@@ -63,7 +79,13 @@ export function occupants(block, P, N) {
 
 // DEFAULT_CONFIG is injected by the caller (app.js) via setDefaults(); tests pass a
 // literal. This keeps engine.js free of catalog data.
-let DEFAULTS = { people: 2, prep: 5, theme: "Volt", volume: 0.8, targetMin: 0, voice: true, ticks: true, halfChime: true };
+// NOTE: keep in sync with DEFAULT in catalog.js and the setDefaults() call in app.js — every
+// field sanitize() falls back on must exist here, or a legacy/crafted config lands on `undefined`
+// (GAPS #10: a missing keepAwake used to let the screen sleep mid-workout).
+let DEFAULTS = {
+  people: 2, prep: 5, theme: "Volt", volume: 0.8, targetMin: 0,
+  voice: true, ticks: true, halfChime: true, haptics: false, keepAwake: true,
+};
 export function setDefaults(d) { DEFAULTS = { ...DEFAULTS, ...d }; }
 
 export function migrate(c) {
@@ -82,6 +104,7 @@ export function migrate(c) {
 // and a giant stations/ladder array would stall the main thread building phases/DOM.
 // 40 stations / 60 ladder intervals are far beyond any real workout.
 const MAX_STATIONS = 40, MAX_LADDER = 60;
+const BOOL_FIELDS = ["voice", "ticks", "haptics", "keepAwake", "halfChime"];
 
 export function sanitize(c) {
   c.stations = (c.stations || []).slice(0, MAX_STATIONS).map(s0 => {
@@ -113,6 +136,9 @@ export function sanitize(c) {
   // Coerce every name to a string so app.js personLabel()'s .trim() can never throw.
   c.personNames = (c.personNames || []).slice(0, c.people)
     .map(n => typeof n === "string" ? n : "");
+  // Booleans are part of the trust boundary too: a crafted config can carry voice:"yes" (truthy
+  // but not a boolean) and a legacy one can omit keepAwake entirely. Coerce, defaulting when absent.
+  for (const b of BOOL_FIELDS) c[b] = (c[b] === undefined) ? !!DEFAULTS[b] : !!c[b];
   return c;
 }
 
@@ -281,4 +307,47 @@ export function guestAccessLabel(total, free) {
   if (t === 0) return "No workouts";
   const noun = t === 1 ? "workout" : "workouts";
   return f >= t ? "All " + t + " " + noun : f + " of " + t + " " + noun;
+}
+
+// ===================================================================================
+// Boot / run-loop decisions (pure) — extracted from app.js so they can be tested (GAPS #3).
+// ===================================================================================
+
+// What a given URL hash plus "does this device already have a saved config" means for boot.
+// `configSource` is the fix for GAPS #5: a stale share hash must not half-apply — a returning
+// user's config comes from localStorage, never from the link they didn't choose to open.
+export function decideBoot(hash, hasLocal) {
+  const bootedFromShare = /^#?[wc]=/.test(hash || "");
+  const freshShare = bootedFromShare && !hasLocal;
+  return {
+    bootedFromShare,
+    freshShare,
+    screen: freshShare ? "live" : "welcome",
+    configSource: freshShare ? "share" : "local",
+    clearHash: bootedFromShare && !freshShare,
+  };
+}
+
+// Is the app quiet enough to swap the live config out from under the user (cloud sync, another
+// tab's write)? Only on the two non-workout screens, with nothing running and no share deep-link.
+export function isIdle({ activeScreen, running, freshShare }) {
+  return !freshShare && !running && (activeScreen === "home" || activeScreen === "welcome");
+}
+
+// Advance the clock past every phase whose time has run out, carrying the negative leftover.
+// Returns the phase actually landed on plus the indexes flown past. A backgrounded tab (rAF is
+// paused while hidden) can miss many phases at once; the caller announces only the landing phase
+// rather than firing a burst of beeps for each skipped one (GAPS #7).
+export function advancePhases(phases, idx, remaining) {
+  const skipped = [];
+  while (remaining <= 0) {
+    const leftover = remaining;
+    idx++;
+    if (idx >= phases.length) {
+      return { idx: phases.length - 1, remaining: 0, finished: true, skipped };
+    }
+    remaining = phases[idx].dur * 1000 + leftover;
+    if (remaining <= 0) skipped.push(idx);
+  }
+  return { idx, remaining, finished: false, skipped };
 }
