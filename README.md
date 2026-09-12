@@ -4,8 +4,7 @@ A group interval-timer web app: a buildless vanilla-JS client and an Express 5 +
 email/password JWT accounts and per-user cloud sync. Run a station circuit for up to six people,
 with a descending work/rest ladder, spoken cues, and rotation prompts.
 
-- **How it works, end to end:** [`PROJECT.md`](PROJECT.md)
-- **Known weaknesses and their scoped fixes:** [`GAPS.md`](GAPS.md)
+- **How it works, end to end (plus accepted risks):** [`PROJECT.md`](PROJECT.md)
 - **Conventions and rules for changing the code:** [`CLAUDE.md`](CLAUDE.md)
 - **Deployment (Docker → Railway, behind Cloudflare):** [`docs/deploy.md`](docs/deploy.md)
 

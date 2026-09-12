@@ -2,7 +2,10 @@
 
 Vanilla-JS interval-timer web app with a buildless client and an Express 5 + MongoDB API
 (email/password JWT accounts, per-user cloud sync).
-**Architecture & narrative:** see `PROJECT.md`. **Audit ledger (every past weakness and how it was closed):** see `GAPS.md`.
+**Architecture, narrative & accepted risks:** see `PROJECT.md`.
+**`GAPS #n` in a code comment** refers to the retired weakness audit — every item was fixed and
+the file was removed on 2026-09-12. Read it with `git show e8c1828:GAPS.md`; the surviving risks are
+in PROJECT.md's "Accepted risks".
 
 ## Commands
 
