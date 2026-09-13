@@ -1,4 +1,5 @@
-import { enc, dec, sanitize, sameCircuit, lightDelta, applyLight } from "./engine.js";
+import { enc, dec, sanitize, sameCircuit, lightDelta, applyLight,
+         summarizeConfig, classifyPreset } from "./engine.js";
 
 export { sanitize };
 
@@ -62,11 +63,13 @@ export const DEFAULT = {
 export const WORKOUTS = [
   {
     id: "kb-ladder", name: "Full-Body KB Ladder", category: "Strength · Descending 60→20s",
+    blurb: "Six stations, one kettlebell, intervals that shrink as you tire.",
     defaultPeople: 2, ladder: LADDERS["Descending"], theme: "Volt", prep: 5, targetMin: 0,
     stations: DEFAULT.stations,
   },
   {
     id: "tabata", name: "Tabata Burner", category: "Cardio · 8× 20/10",
+    blurb: "Twenty on, ten off, eight times. As short and as unpleasant as it sounds.",
     defaultPeople: 1, ladder: LADDERS["Tabata"], theme: "Ember", prep: 5, targetMin: 0,
     stations: [
       {ex:"Burpees",         gear:"Bodyweight", rep:"Max", url:YT("burpee proper form")},
@@ -77,6 +80,7 @@ export const WORKOUTS = [
   },
   {
     id: "bw-pyramid", name: "Bodyweight Pyramid", category: "No gear · 20→60→20s",
+    blurb: "Climbs from 20 seconds to 60 and walks back down. Nothing to carry.",
     defaultPeople: 2, ladder: LADDERS["Pyramid"], theme: "Ice", prep: 5, targetMin: 0,
     stations: [
       {ex:"Push-ups",       gear:"Bodyweight", rep:"12–15", url:YT("push up proper form")},
@@ -89,11 +93,13 @@ export const WORKOUTS = [
   },
   {
     id: "partner-circuit", name: "Partner Circuit", category: "Strength · Descending",
+    blurb: "The same ladder built for two — you rotate, they rotate, nobody waits for the bell.",
     defaultPeople: 2, ladder: LADDERS["Descending"], theme: "Candy", prep: 5, targetMin: 0,
     stations: DEFAULT.stations,
   },
   {
     id: "quick-15", name: "Quick 15", category: "Flat 40/20 · 15 min",
+    blurb: "Flat 40/20 on a 15-minute cap, for the days you nearly skipped it.",
     defaultPeople: 2, ladder: LADDERS["Flat 40/20"], theme: "Mono", prep: 5, targetMin: 15,
     stations: [
       {ex:"KB Swings",   gear:"25 lb",      rep:"15", url:YT("kettlebell swing form technique")},
@@ -120,7 +126,7 @@ export function workoutToConfig(w) {
 }
 
 // Build the sanitized baseline config for a catalog workout id (or null).
-function baselineFor(id) {
+export function baselineFor(id) {
   const w = WORKOUTS.find(x => x.id === id);
   return w ? sanitize(workoutToConfig(w)) : null;
 }
@@ -150,4 +156,88 @@ export function decShare(str) {
   }
   if (body.startsWith("c=")) return dec(body.slice(2));
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Landing page: the user's own library, assembled from what the app already stores.
+// Pure — takes the three stores as data and returns rows ready to render. No DOM.
+//
+//   presets   ladder presets            -> "saved" or "edited" (edited = names a catalog
+//                                          workout but no longer matches its circuit)
+//   regimens  uploaded regimen@1 JSON   -> "uploaded"
+//   pins      array of row keys         -> the pinned flag
+//
+// Rows are sorted pinned-first, then by name, so the list is stable between renders.
+export function buildLibrary({ presets = {}, regimens = {}, pins = [] } = {}) {
+  const rows = [];
+
+  Object.keys(presets).forEach(name => {
+    const cfg = sanitize(JSON.parse(JSON.stringify(presets[name])));
+    const sum = summarizeConfig(cfg);
+    const origin = classifyPreset(cfg, baselineFor(cfg.workoutId));
+    const from = origin === "edited" ? (WORKOUTS.find(w => w.id === cfg.workoutId) || {}).name : "";
+    rows.push({
+      key: "preset:" + name, name, kind: "preset", origin, from,
+      minutes: sum.minutes, stations: sum.stations, people: sum.people,
+      ladder: cfg.ladder, pinned: pins.includes("preset:" + name),
+    });
+  });
+
+  Object.keys(regimens).forEach(name => {
+    const r = regimens[name] || {};
+    // A regimen's "ladder", for the interval strip, is its FLATTENED work/rest pairs — groups
+    // expanded, so a 3-round group draws three peaks instead of one slab. Capped so a 500-segment
+    // upload can't produce a 500-bar strip.
+    const ladder = [];
+    regimenFlat(r).slice(0, MAX_STRIP_BARS * 2).forEach(s => {
+      if (s.type === "rest" && ladder.length) ladder[ladder.length - 1][1] = s.seconds || 0;
+      else if (s.type !== "rest") ladder.push([s.seconds || 1, 0]);
+    });
+    rows.push({
+      key: "regimen:" + name, name, kind: "regimen", origin: "uploaded", from: "",
+      // Count FLATTENED segments (groups expanded), the same number the live screen and the
+      // upload preview show — a row saying "3 segments" for an 8-segment workout is a lie.
+      minutes: Math.max(1, Math.round(regimenSeconds(r) / 60)), stations: regimenCount(r), people: 1,
+      ladder: ladder.length ? ladder : [[30, 0]], pinned: pins.includes("regimen:" + name),
+    });
+  });
+
+  return rows.sort((a, b) =>
+    (b.pinned - a.pinned) || a.name.localeCompare(b.name));
+}
+
+// A strip past this many bars is a smear, not a shape.
+const MAX_STRIP_BARS = 40;
+
+// Leaf segments of a regimen in run order, groups expanded.
+export function regimenFlat(r) {
+  const walk = list => (Array.isArray(list) ? list : []).reduce((out, s) => {
+    if (!s) return out;
+    if (s.type === "group") {
+      for (let i = 0; i < (s.rounds || 1); i++) out = out.concat(walk(s.segments));
+      return out;
+    }
+    return out.concat(s);
+  }, []);
+  return walk(r.segments);
+}
+
+// Flattened leaf-segment count, groups expanded.
+function regimenCount(r) {
+  const walk = list => (Array.isArray(list) ? list : []).reduce((n, s) => {
+    if (!s) return n;
+    if (s.type === "group") return n + (s.rounds || 1) * walk(s.segments);
+    return n + 1;
+  }, 0);
+  return walk(r.segments);
+}
+
+// Total seconds of a regimen, groups expanded. Cheap enough to run per row.
+function regimenSeconds(r) {
+  const walk = list => (Array.isArray(list) ? list : []).reduce((n, s) => {
+    if (!s) return n;
+    if (s.type === "group") return n + (s.rounds || 1) * walk(s.segments);
+    return n + (s.seconds || 0);
+  }, 0);
+  return walk(r.segments);
 }

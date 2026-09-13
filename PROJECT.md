@@ -1,9 +1,15 @@
 # PROJECT.md — Ladder Circuit Timer
 
 _Knowledge-transfer document, written 2026-07-10 after a full read of the codebase, updated
-2026-08-29 for the migration off Firebase onto a self-hosted Express + MongoDB backend. Companion
-files: `GAPS.md` (known weaknesses, severity-ordered) and `CLAUDE.md` (operational rules for AI
-sessions)._
+2026-08-29 for the migration off Firebase onto a self-hosted Express + MongoDB backend, and fully
+reviewed 2026-09-12 when the last of the outstanding weaknesses was closed. Companion file:
+`CLAUDE.md` (operational rules for AI sessions)._
+
+> **"GAPS #n" in code comments.** `GAPS.md` was a severity-ordered audit of this codebase's
+> weaknesses. Every item in it has been fixed, so the file was retired on 2026-09-12; the comments
+> citing it were left in place because they explain *why* a piece of code is shaped the way it is.
+> Read the original with `git show e8c1828:GAPS.md`. The risks that outlived their fixes are recorded
+> under [Accepted risks](#accepted-risks) below.
 
 ## What this is
 
@@ -22,7 +28,7 @@ Users can:
 | Vanilla JS ES modules | No framework, no bundler, no client dependencies | Deliberate and still in force **for the client**: it stays buildless, and `server/scripts/build-client.mjs` only copies files and injects `BASE_PATH`. |
 | Express 5 + Mongoose 8 + MongoDB | One service serving both `/api/*` and the app itself | Replaced Firebase in the 2026-07-20 platform migration. Mirrors the FACS deployment model: Railway + MongoDB Atlas behind a Cloudflare route at `flywren-technologies.com/workouts`. See `docs/superpowers/specs/2026-07-20-platform-migration-design.md`. |
 | JWT auth (access + rotating refresh) | Email/password accounts, **admin-provisioned, no self-registration** | Replaced Google popup sign-in. Access token in memory only (XSS mitigation); refresh token in `localStorage` ("Remember me") or `sessionStorage`. See `docs/superpowers/specs/2026-07-20-auth-swap-facs-design.md`. |
-| `node --test` (client) / `vitest` + `supertest` + `mongodb-memory-server` (server) | Two suites, 65 + 29 tests | Client keeps zero dependencies; the server tests run against an in-memory MongoDB, so no Atlas access is needed to run them. |
+| `node --test` (client) / `vitest` + `supertest` + `mongodb-memory-server` (server) | Two suites, 86 + 32 tests (run on push/PR by `.github/workflows/test.yml`) | Client keeps zero dependencies; the server tests run against an in-memory MongoDB, so no Atlas access is needed to run them. |
 | Google Fonts (Anton, Barlow, Barlow Condensed) | The "sporty poster" typography | The only remaining third-party origin. |
 | `npm run dev:local` (server) | Whole stack on :4000 with an embedded MongoDB | Atlas requires IP allowlisting, which blocks local work; `mongodb-memory-server` against a persistent dbPath avoids it. `npm start` at the root still serves the client alone for pure UI work. |
 
@@ -61,7 +67,7 @@ catalog.js      │
 
 - **`engine.js`** — pure logic, zero DOM, imported by both the browser and Node tests. Phase building (`buildPhases`), block math (`blockLenOf`, `blocksFor`), station occupancy (`occupants`, `offsetFor`, `clampPeople`), config repair (`migrate` → `sanitize`), per-second audio-cue decisions (`secondCue`), base64 codec (`enc`/`dec`), and share-link delta helpers (`sameCircuit`, `lightDelta`, `applyLight`, `LIGHT_FIELDS`). Engine defaults are **injected** by app.js via `setDefaults()` so engine.js stays free of catalog data.
 - **`catalog.js`** — data + share-link policy. `THEMES`, `LADDERS`, `LENGTHS`, `EXERCISES`, `DEFAULT` config, the `WORKOUTS` catalog, `workoutToConfig()`, and `encShare`/`decShare` (short-link logic built on engine helpers).
-- **`store.js`** — the `local` localStorage backend, `decideMigration(localCfg, cloudCfg)` (cloud wins), the preset namespace helpers (`splitPresets`/`mergePresets`), and the cloud backend built on `api.js`. DOM-free and unit-testable.
+- **`store.js`** — the `local` localStorage backend (config plus a sidecar `ladder.last.at` write stamp), `decideMigration(localCfg, cloudCfg, {localAt, cloudAt})` (**newest wins** when both sides are stamped, cloud otherwise), `mergePresetMaps()` (presets merge, never replace), the preset namespace helpers (`splitPresets`/`mergePresets`), and the cloud backend built on `api.js`. DOM-free and unit-testable.
 - **`auth.js` / `api.js`** — `auth.js` owns the session (login, `/auth/refresh` restore on page load, logout, `onAuthChange`); `api.js` owns every request, attaching the Bearer token and retrying once through a single-flight refresh on a 401 so a rotated-out token never causes a spurious logout.
 - **`app.js` (~640 lines)** — everything else: boot flow, screen router (`showScreen`), the rAF timer loop, Web Audio beeps + speechSynthesis voice + vibration + wake lock, all rendering (string-built `innerHTML` with a local `esc()` helper), the settings sheet, the customize screen, catalog rendering with guest locks, and the auth/cloud orchestration (`onAuthChange`, debounced `cloudSaveConfig`).
 
@@ -89,7 +95,7 @@ Everything revolves around one plain object (`config`):
   path as localStorage. Don't normalize it into document fields.
 - **Regimens** (uploaded `regimen@1` workouts) currently ride along inside `presetsJson` under the
   reserved `__regimens__` key — see `store.js` `splitPresets`/`mergePresets`. A known wart.
-- **On sign-in** (`onAuthChange`): `GET /api/state` → `decideMigration`: cloud wins if present, else upload local. The cloud copy is always cached to localStorage; the in-memory `config` is only replaced if the app is "idle" (on welcome/home screen, not mid-workout, not a fresh share). Presets: cloud wins wholesale if non-empty, else local uploaded.
+- **On sign-in** (`onAuthChange`): `GET /api/state` (which returns the document's `updatedAt`) → `decideMigration`: the **newer** of local/cloud wins when both are timestamped, otherwise cloud. The cloud copy is always cached to localStorage; the in-memory `config` is only replaced when `isIdle(...)` — welcome/home screen, nothing running, no fresh share. Presets **merge** (`mergePresetMaps`, cloud winning a name collision) and the merge is pushed back up, so presets made locally since the last sync are never discarded. Every cloud failure goes through `noteSync()`: a `console.warn` plus the sync dot on the identity chip.
 - **Authorization** is server-side: `verifyJWT` is applied per-route (not router-wide, so it never
   intercepts siblings like `/api/health`), and every controller scopes its query to `req.user.id`.
   A user can only ever read or write their own state.
@@ -120,19 +126,19 @@ A returning signed-in user still lands on the welcome screen rather than being s
 
 ### UI structure
 
-Four screens toggled by `showScreen(name)` adding `.active` to `#screen-welcome | -home | -customize | -live`. One shared **settings sheet** serves two masters: opened from a gear button it edits `config` directly (Apply = sanitize + persist + rebuild); opened from the customize screen (`sheetFromCustomize = true`) it edits the customize `draft` and Apply just closes back to customize. The `draft` variable is shared between the sheet and the customize screen — that flag is the only thing distinguishing the flows.
+Five screens toggled by `showScreen(name)` adding `.active` to `#screen-welcome | -landing | -home | -customize | -live`. **Landing** is the lobby you reach after signing in or choosing guest: a left nav, a hero for whatever workout is loaded now, "My workouts" (saved setups, uploaded regimens, edited catalog workouts, pinned rows — assembled by `buildLibrary()` in catalog.js), and three catalog teasers. It is a **light** surface along with welcome; home/customize/live stay dark. One shared **settings sheet** serves two masters: opened from a gear button it edits `config` directly (Apply = sanitize + persist + rebuild); opened from the customize screen (`sheetFromCustomize = true`) it edits the customize `draft` and Apply just closes back to customize. The `draft` variable is shared between the sheet and the customize screen — that flag is the only thing distinguishing the flows.
 
 Guest gating: workouts beyond `GUEST_FREE = 2` render locked with a "Sign in to unlock" button. This is **client-side cosmetics only** — the full catalog ships in `catalog.js`, so treat it as a nudge, never as security.
 
 ## Key design decisions (inferred + documented)
 
 1. **Buildless static site is a hard constraint.** No bundler, no npm deps, no server. Every feature (auth, sync, share links) is designed around this. Don't introduce a build step casually.
-2. **The cloud is an optional upgrade.** Guests never call the API at all. Every auth/cloud call is wrapped in try/catch — on any error the app keeps working locally (silently; see GAPS #6). A logging or network failure must never break the timer.
+2. **The cloud is an optional upgrade.** Guests never call the API at all. Every auth/cloud call is wrapped in try/catch — on any error the app keeps working locally. A logging or network failure must never break the timer. Degrading is not the same as hiding, though: every cloud catch calls `noteSync()`, which console.warns and drives the sync dot on the identity chip.
 3. **Purity boundary for testability.** Everything that can be tested without a DOM lives in engine/catalog/store; app.js is consciously the untested integration layer.
 4. **`sanitize(migrate())` as the single trust boundary** for share links, localStorage, cloud data, and presets. Hardened over multiple commits (acf10ee) against crafted configs — nulls, wrong types, huge arrays, `javascript:` URLs, NaN volume.
 5. **Layered security posture:** the CSP `<meta>` (heavily commented in index.html) is now down to `'self'` plus Google Fonts; `frame-ancestors` doesn't work in a meta CSP, so `framebust.js` provides the clickjacking guard. The server adds `helmet` and rate limiting. A pre-commit hook in `.claude/settings.json` scans staged files for secret patterns. Real authorization is server-side per-user scoping.
 6. **`WorkoutState` stores JSON strings, not documents** — inherited from Firestore's nested-array limitation and kept because it keeps the schema trivially versioned by the same `migrate()` path as localStorage.
-7. **Cloud-wins conflict resolution** — simple, predictable, but can lose local edits (GAPS #1).
+7. **Newest-wins conflict resolution.** When local and cloud configs are both timestamped, the newer one wins; otherwise cloud wins, as before. Presets always merge (cloud wins a name collision) rather than replacing, so a device can never lose presets by signing in. Full multi-device conflict resolution is deliberately out of scope.
 
 ## Critical paths (ranked)
 
@@ -153,11 +159,36 @@ Guest gating: workouts beyond `GUEST_FREE = 2` render locked with a "Sign in to 
 ## Things that will trip you up
 
 1. **Secrets now live in `server/.env`** (`MONGODB_URI`, `JWT_SECRET`, `CLIENT_ORIGIN`, `BASE_PATH`), which is gitignored. The **pre-commit hook blocks any commit whose staged files match `apiKey`** — that guard is still live and still worth respecting. `npm run dev:local` needs none of it: it supplies an embedded MongoDB and generates an ephemeral `JWT_SECRET`.
-2. **`design-tokens.css` is not linked from index.html.** Its `:root` block was copied into the top of `styles.css`, which is the live copy; the `[data-theme=…]` selectors in design-tokens.css are used by nothing (themes are applied by JS `style.setProperty`, not a data attribute). Edit `styles.css`, treat `design-tokens.css` as historical documentation.
-3. **Themes are two different mechanisms:** the 4 phase colors come from `THEMES` in catalog.js applied via `applyTheme()`; the 6 per-person colors (`--p1..--p6`) are fixed in styles.css and do not change with theme.
-4. **`sanitize` mutates in place.** Callers that need the original clone first (`sanitize(clone(draft))` is the idiom).
-5. **Engine defaults ≠ catalog DEFAULT.** `engine.js` has its own internal `DEFAULTS` used by `migrate`/`sanitize` fallbacks, overridden at startup by `setDefaults(...)` in app.js — which passes only a subset of fields (notably **not** `haptics`/`keepAwake`). Tests rely on the engine's built-ins.
-6. **A share link opened by an existing user is deliberately ignored for navigation** (hash stripped, welcome shown) — but `loadConfig()` already decoded it into `config`, so it half-applies. See GAPS #5.
-7. **rAF timer in a backgrounded tab:** the loop stops getting frames; on return it fast-forwards through the missed phases in one tick, firing each phase's `enterPhase` cue back-to-back. Wall-clock time stays correct; the audio experience doesn't.
-8. **There is no self-registration.** A new environment has no users until one is provisioned — `cd server && npm run create-admin`, or just `npm run dev:local`, which seeds `admin@local.test` / `LocalAdmin!2026` on first run. If sign-in "breaks" in a fresh environment, check that a user exists before suspecting the code.
-9. **`docs/superpowers/`** contains the design specs and implementation plans (brainstorm → spec → plan workflow) for the catalog, audio cues, share links, and accounts features. They explain most "why"s; the accounts spec documents locked-in decisions. `prompt.md` in the root is an orchestration prompt template for driving the `.claude/agents/*` subagent pipeline — not app documentation.
+2. **Class names collide across the two worlds.** `styles.css` carries the dark app's unscoped rules — `button.ghost` and `.count` (the timer's countdown overlay) among them — so landing styles are namespaced `lp*` and its buttons use `.lpbtn.lpghost`, not `.ghost`. Check for an existing selector before adding a generic class name.
+3. **`styles.css` is the only stylesheet.** The never-linked `design-tokens.css`, which duplicated the token block, was deleted (GAPS #11). Themes are applied by JS `style.setProperty`, not a data attribute.
+4. **Themes are two different mechanisms:** the 4 phase colors come from `THEMES` in catalog.js applied via `applyTheme()`; the 6 per-person colors (`--p1..--p6`) are fixed in styles.css and do not change with theme.
+5. **`sanitize` mutates in place.** Callers that need the original clone first (`sanitize(clone(draft))` is the idiom).
+6. **Engine defaults mirror catalog DEFAULT.** `engine.js` keeps internal `DEFAULTS` for `migrate`/`sanitize` fallbacks (tests rely on them), overridden at startup by `setDefaults(...)` in app.js — which now passes **every** field, `haptics`/`keepAwake` included. Add a new config field to both, plus `sanitize`, `migrate`, `LIGHT_FIELDS` and catalog `DEFAULT`.
+7. **A share link opened by an existing user is ignored completely** — `decideBoot()` returns `configSource: "local"`, so the hash is stripped, welcome is shown, and `loadConfig()` never reads the link. (It used to half-apply; see GAPS #5.)
+8. **rAF timer in a backgrounded tab:** the loop stops getting frames. On return, `advancePhases()` fast-forwards with exact wall-clock accounting and announces **only the phase landed on** (the phases flown past come back as `skipped` and are deliberately silent), and the `visibilitychange` handler re-renders immediately.
+9. **There is no self-registration.** A new environment has no users until one is provisioned — `cd server && npm run create-admin`, or just `npm run dev:local`, which seeds `admin@local.test` / `LocalAdmin!2026` on first run. If sign-in "breaks" in a fresh environment, check that a user exists before suspecting the code.
+10. **`docs/superpowers/`** contains the design specs and implementation plans (brainstorm → spec → plan workflow) for the catalog, audio cues, share links, and accounts features. They explain most "why"s; the accounts spec documents locked-in decisions. `docs/agents/prompt.md` is an orchestration prompt template for driving the `.claude/agents/*` subagent pipeline — not app documentation.
+
+## Accepted risks
+
+Not a to-do list — properties of the codebase that were examined, judged acceptable, and left in
+place. Carried over from the retired `GAPS.md` so they are not rediscovered as surprises.
+
+1. **The DOM/render layer of `app.js` is untested.** The pure decisions are extracted into
+   `engine.js` and covered (`decideBoot`, `isIdle`, `advancePhases`, `sanitize`/`migrate`), but
+   rendering, the settings sheet, and the audio wiring are verified by hand. Anything new and
+   testable belongs in `engine.js`.
+2. **One `draft` global serves two editors** — the settings sheet (editing `config`) and the
+   customize screen (editing a catalog workout) — disambiguated only by `sheetFromCustomize`. Every
+   new entry point must set that flag. Splitting it into `sheetDraft` / `custDraft` was judged a
+   bigger change than the risk warrants.
+3. **Guest workout locks are a nudge, not security.** The whole catalog ships in `catalog.js`, the
+   lock is a CSS class, and `decShare()` has no lock check — a `#w=<id>` link opens any workout as a
+   guest. Real gating would mean serving catalog content from the API.
+4. **Regimens are smuggled into the presets document** under the reserved `__regimens__` key. A real
+   fix is scoped as Tasks 1 and 10 of
+   `docs/superpowers/plans/2026-08-29-custom-workouts-and-logging.md` — feature work, not a defect.
+5. **Two console errors on load are expected**: `frame-ancestors` is ignored in a `<meta>` CSP
+   (hence `framebust.js`), and the `data:` web-app manifest is blocked by `default-src 'self'`.
+6. **`renderCatalog` runs `buildPhases` per card** on every auth change — negligible at 5 workouts,
+   worth revisiting only if the catalog grows to hundreds.
