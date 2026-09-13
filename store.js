@@ -12,9 +12,14 @@ const LS_PRESETS = "ladder.presets";
 // mistaken for — a ladder-circuit config/preset (v1 decision 5).
 const LS_REGIMEN = "ladder.regimen";
 const LS_REGIMEN_PRESETS = "ladder.regimenPresets";
+// Pinned rows on the landing page ("preset:Name" / "regimen:Name").
+const LS_PINS = "ladder.pins";
 // Reserved key that namespaces regimen presets inside the single cloud presets document, so the
 // server's /api/presets contract stays unchanged. Rejected as a user-facing preset name.
 export const REGIMEN_NS = "__regimens__";
+// Same trick for the landing page's pinned rows, so a pin follows you between devices.
+// Both namespaces are retired together by the custom-workouts plan.
+export const PINS_NS = "__pins__";
 
 export const local = {
   loadConfig() { try { const s = localStorage.getItem(LS_CONFIG); return s ? JSON.parse(s) : null; } catch (e) { return null; } },
@@ -28,18 +33,34 @@ export const local = {
   saveRegimen(r) { try { r ? localStorage.setItem(LS_REGIMEN, JSON.stringify(r)) : localStorage.removeItem(LS_REGIMEN); } catch (e) {} },
   loadRegimenPresets() { try { return JSON.parse(localStorage.getItem(LS_REGIMEN_PRESETS) || "{}"); } catch (e) { return {}; } },
   saveRegimenPresets(o) { try { localStorage.setItem(LS_REGIMEN_PRESETS, JSON.stringify(o)); } catch (e) {} },
+  loadPins() { try { const a = JSON.parse(localStorage.getItem(LS_PINS) || "[]"); return Array.isArray(a) ? a.filter(x => typeof x === "string") : []; } catch (e) { return []; } },
+  savePins(a) { try { localStorage.setItem(LS_PINS, JSON.stringify((a || []).filter(x => typeof x === "string"))); } catch (e) {} },
 };
 
 // Split/merge helpers for the cloud presets document, which carries both kinds.
 export function splitPresets(doc) {
   const d = (doc && typeof doc === "object") ? doc : {};
-  const { [REGIMEN_NS]: regimens, ...ladder } = d;
-  return { ladder, regimens: (regimens && typeof regimens === "object") ? regimens : {} };
+  const { [REGIMEN_NS]: regimens, [PINS_NS]: pins, ...ladder } = d;
+  return {
+    ladder,
+    regimens: (regimens && typeof regimens === "object") ? regimens : {},
+    pins: Array.isArray(pins) ? pins.filter(x => typeof x === "string") : [],
+  };
 }
-export function mergePresets(ladder, regimens) {
+export function mergePresets(ladder, regimens, pins) {
   const out = { ...(ladder || {}) };
   delete out[REGIMEN_NS];
+  delete out[PINS_NS];
   if (regimens && Object.keys(regimens).length) out[REGIMEN_NS] = regimens;
+  if (pins && pins.length) out[PINS_NS] = pins;
+  return out;
+}
+
+// Union of two pin lists, order-stable. Pins are a preference, so a device that pinned
+// something offline keeps it after a sync (GAPS #1's merge rule, applied to pins).
+export function mergePins(localPins, cloudPins) {
+  const out = [...(localPins || [])];
+  (cloudPins || []).forEach(p => { if (!out.includes(p)) out.push(p); });
   return out;
 }
 

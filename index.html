@@ -77,9 +77,83 @@
     <p class="authfoot" id="welcomeHint">Accounts are created by an administrator.</p>
   </div>
 </section>
+<!-- ============================ LANDING ============================
+     The lobby between sign-in and the catalog. Light surface (body.auth-light, toggled in
+     showScreen) — the timer is the app's only dark world. Everything here is rendered by
+     renderLanding() in app.js from data the app already stores. -->
+<section id="screen-landing" class="screen">
+  <div class="lp">
+    <nav class="lpnav" aria-label="Main">
+      <div class="lpmark">
+        <svg viewBox="0 0 48 48" role="img" aria-label="Ladder Circuit">
+          <circle cx="24" cy="24" r="18" fill="none" stroke="#e3e5ea" stroke-width="5"></circle>
+          <circle cx="24" cy="24" r="18" fill="none" stroke="#6f9b16" stroke-width="5"
+                  stroke-linecap="round" stroke-dasharray="85 200" transform="rotate(-90 24 24)"></circle>
+          <circle cx="24" cy="24" r="4.5" fill="#e08a1e"></circle>
+        </svg>
+        <b>Ladder</b><span>Circuit</span>
+      </div>
+
+      <div class="lpnavlist">
+        <button class="lpnavitem" id="navToday" aria-current="page"><i class="tick"></i>Today</button>
+        <button class="lpnavitem" id="navMine"><i class="tick"></i>My workouts<span class="lpcount" id="navMineCount"></span></button>
+        <button class="lpnavitem" id="navCatalog"><i class="tick"></i>Catalog<span class="lpcount" id="navCatCount"></span></button>
+        <div class="lpnavrule"></div>
+        <button class="lpnavitem" id="navSounds"><i class="tick"></i>Sounds &amp; timing</button>
+        <button class="lpnavitem" id="navAccount"><i class="tick"></i>Account</button>
+      </div>
+
+      <div class="lpnavfoot">
+        <div class="lpwho" id="lpWho"></div>
+        <p class="lpnavnote" id="lpSyncNote"></p>
+      </div>
+    </nav>
+
+    <main class="lpmain">
+      <h1 class="lpgreet" id="lpGreet">Ready when you are.</h1>
+      <p class="lpsub" id="lpSub"></p>
+
+      <section aria-labelledby="lpResumeH">
+        <div class="lpsechead"><h2 id="lpResumeH">Pick up where you left off</h2></div>
+        <div class="lpresume">
+          <div class="lpresume-top">
+            <div class="lpresume-id">
+              <div class="lpwhen" id="lpResumeWhen"></div>
+              <h3 id="lpResumeName"></h3>
+              <p id="lpResumeBlurb"></p>
+            </div>
+            <div class="lpresume-act">
+              <button class="lpbtn" id="lpStart">Start workout</button>
+              <button class="lpbtn lpghost" id="lpChange">Change setup</button>
+            </div>
+          </div>
+          <div class="lpresume-strip">
+            <div class="strip lg" id="lpResumeStrip"></div>
+            <div class="stripkey"><span><i></i>work</span><span><i class="r"></i>rest</span><span id="lpStripNote"></span></div>
+          </div>
+          <div class="lpresume-foot" id="lpResumeFoot"></div>
+        </div>
+      </section>
+
+      <section aria-labelledby="lpMineH">
+        <div class="lpsechead"><h2 id="lpMineH">My workouts</h2></div>
+        <div class="lpchips" id="lpFilters" role="group" aria-label="Filter my workouts"></div>
+        <div class="lprows" id="lpMine"></div>
+      </section>
+
+      <section aria-labelledby="lpCatH">
+        <div class="lpsechead"><h2 id="lpCatH">Try something else</h2>
+          <button class="lpmore" id="lpAllWorkouts">All workouts</button>
+        </div>
+        <div class="lpteasers" id="lpTeasers"></div>
+      </section>
+    </main>
+  </div>
+</section>
+
 <section id="screen-home" class="screen">
   <div class="home">
-    <div class="hrow"><div class="brand"><b>Ladder</b> Circuit</div><div class="idcluster"><button class="iconbtn gearbtn" aria-label="Settings">&#9881;</button><button class="idchip" hidden aria-label="Account"></button></div></div>
+    <div class="hrow"><button class="homeback" id="homeBack">&lsaquo; Today</button><div class="brand"><b>Ladder</b> Circuit</div><div class="idcluster"><button class="iconbtn gearbtn" aria-label="Settings">&#9881;</button><button class="idchip" hidden aria-label="Account"></button></div></div>
     <div class="lab">Pick a workout</div>
     <div class="stack" id="catalogStack"></div>
     <button class="browse" id="buildOwn">+ Build my own from scratch</button>
@@ -131,6 +205,7 @@
 <div class="bigcircuit" id="bigCircuit"></div>
 <div class="wrap">
   <div class="head">
+    <button class="homeback" id="liveBack">&lsaquo; Today</button>
     <div class="title"><b>Ladder</b> Circuit</div>
     <div class="right">
       <div class="totpill" id="tot">30:00</div>

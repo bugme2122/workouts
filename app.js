@@ -1,10 +1,11 @@
 import {
   THEMES, LADDERS, LENGTHS, EXERCISES, DEFAULT, WORKOUTS, howto, workoutToConfig,
-  encShare, decShare,
+  encShare, decShare, buildLibrary,
 } from "./catalog.js";
 import {
   blockLenOf, blocksFor, buildPhases, migrate, sanitize,
   clampPeople, occupants, setDefaults, secondCue, decideBoot, isIdle, advancePhases,
+  summarizeConfig, gearOf,
   validateRegimen, sanitizeRegimen, buildRegimenPhases, REGIMEN_SCHEMA,
   guestAccessLabel,
 } from "./engine.js";
@@ -42,12 +43,20 @@ function persist(){
   cloudSaveConfig(config);
 }
 function getPresets(){ return store.local.loadPresets(); }
-function setPresets(o){ store.local.savePresets(o); cloudSavePresets(store.mergePresets(o, getRegimenPresets())); }
+function setPresets(o){ store.local.savePresets(o); cloudSavePresets(store.mergePresets(o, getRegimenPresets(), getPins())); refreshLandingIfVisible(); }
 // BYOW persistence (PR-1/PR-2/PR-3): the active regimen and regimen presets, namespaced away
 // from ladder presets. Guests persist to localStorage; signed-in users ride the same cloud doc.
 function persistRegimen(){ store.local.saveRegimen(activeRegimen); }
 function getRegimenPresets(){ return store.local.loadRegimenPresets(); }
-function setRegimenPresets(o){ store.local.saveRegimenPresets(o); cloudSavePresets(store.mergePresets(getPresets(), o)); }
+function setRegimenPresets(o){ store.local.saveRegimenPresets(o); cloudSavePresets(store.mergePresets(getPresets(), o, getPins())); refreshLandingIfVisible(); }
+// Landing-page pins. Stored beside the presets and carried in the same cloud document under
+// their own reserved key, so a pin follows you between devices.
+function getPins(){ return store.local.loadPins(); }
+function setPins(a){ store.local.savePins(a); cloudSavePresets(store.mergePresets(getPresets(), getRegimenPresets(), a)); }
+
+// Saving or deleting a preset from the settings sheet changes what the lobby lists; keep the
+// two in step without making the setters know anything else about the landing screen.
+function refreshLandingIfVisible(){ if(activeScreen === "landing") renderLanding(); }
 
 let cloud=null, authUser=null, _cfgSaveT=null;
 let _authInited=false;
@@ -62,6 +71,7 @@ function noteSync(ok, what, e){
   paintSyncDot();
 }
 function paintSyncDot(){
+  paintLandingSync();
   document.querySelectorAll(".idchip .syncdot").forEach(d=>{
     d.className = "syncdot" + (_syncState ? " " + _syncState : "");
     d.title = _syncState==="err" ? "Last cloud sync failed \u2014 changes are saved on this device"
@@ -117,9 +127,11 @@ async function onAuthChange(u){
         const split=store.splitPresets(cp || {});
         const ladder = store.mergePresetMaps(store.local.loadPresets(), split.ladder);
         const regimens = store.mergePresetMaps(store.local.loadRegimenPresets(), split.regimens);
+        const pins = store.mergePins(store.local.loadPins(), split.pins);
         store.local.savePresets(ladder);
         store.local.saveRegimenPresets(regimens);
-        const merged=store.mergePresets(ladder, regimens);
+        store.local.savePins(pins);
+        const merged=store.mergePresets(ladder, regimens, pins);
         if(Object.keys(merged).length){ await cloud.savePresets(merged); noteSync(true,"presets"); }
       }catch(e){ noteSync(false,"preset sync",e); }
     }catch(e){ noteSync(false,"sync",e); /* keep local config on any cloud error */ }
@@ -133,6 +145,7 @@ async function onAuthChange(u){
     if(wasSignedIn){ closeSettings(); showScreen("welcome"); }
   }
   updateAccountUI(authUser);
+  if(activeScreen==="landing") renderLanding();
 }
 
 let config = loadConfig();
@@ -707,9 +720,10 @@ function showScreen(name) {
   activeScreen = name;
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + name).classList.add("active");
-  // The welcome screen is the app's one light surface (see body.auth-light in
-  // styles.css). Toggled here so it can never desync from the visible screen.
-  const light = name === "welcome";
+  // Welcome and the landing lobby are the app's light surfaces (see body.auth-light in
+  // styles.css). Toggled here, in exactly one place, so it can never desync from the
+  // visible screen. The timer and the catalog stay dark.
+  const light = name === "welcome" || name === "landing";
   document.body.classList.toggle("auth-light", light);
   const tc = document.querySelector('meta[name="theme-color"]');
   if (tc) tc.setAttribute("content", light ? "#ffffff" : "#0b0c0e");
@@ -825,6 +839,249 @@ $("custEditStations").onclick = openCustomizeEditor;
 $("custEditTheme").onclick = openCustomizeEditor;
 $("buildOwn").onclick = () => { if(!authUser){ showScreen("welcome"); return; } openCustomize(null); };
 
+
+// ================= LANDING (the lobby) =================
+// Everything here renders from what the app already stores: the active config, saved ladder
+// presets, uploaded regimens, and the pinned list. There is no session history yet, so the
+// hero shows the setup you would start right now rather than inventing a "last run".
+let lpFilter = "all";
+
+function goLanding(){ showScreen("landing"); renderLanding(); }
+
+// Draw one interval strip into `el`. Width is proportional to seconds so a rest reads as a real
+// pause; work-bar HEIGHT is the seconds on, which is what makes a descending ladder look like
+// stairs and a Tabata look like a picket fence.
+function drawStrip(el, ladder){
+  const lad = (Array.isArray(ladder) && ladder.length) ? ladder : [[30,15]];
+  const total = lad.reduce((a,p)=>a+p[0]+p[1],0) || 1;
+  const maxOn = Math.max(...lad.map(p=>p[0])) || 1;
+  el.innerHTML = "";
+  lad.forEach((p,i)=>{
+    const w = document.createElement("div");
+    w.className = "work";
+    w.style.flex = p[0]/total;
+    w.style.height = Math.round(30 + 70*(p[0]/maxOn)) + "%";
+    w.style.animationDelay = (i*40) + "ms";
+    el.appendChild(w);
+    if(p[1] > 0){
+      const r = document.createElement("div");
+      r.className = "rest";
+      r.style.flex = p[1]/total;
+      el.appendChild(r);
+    }
+  });
+}
+
+// Name of whatever is loaded right now: an adopted regimen, a catalog workout, or a custom circuit.
+function activeName(){
+  if(activeKind==="regimen" && activeRegimen) return activeRegimen.name;
+  const w = WORKOUTS.find(x => x.id === config.workoutId);
+  return w ? w.name : "Your custom circuit";
+}
+function activeBlurb(){
+  if(activeKind==="regimen" && activeRegimen) return "An uploaded workout. It runs on the same clock and cues as everything else.";
+  const w = WORKOUTS.find(x => x.id === config.workoutId);
+  if(w && w.blurb) return w.blurb;
+  return "Built here — your stations, your ladder, your people.";
+}
+
+function renderLandingHero(){
+  const reg = activeKind==="regimen" && activeRegimen;
+  const built = reg ? buildRegimenPhases(activeRegimen) : null;
+  const sum = reg ? null : summarizeConfig(config);
+  const mins = reg ? Math.max(1, Math.round(built.total/60)) : sum.minutes;
+  const people = reg ? 1 : sum.people;
+
+  $("lpResumeWhen").textContent = reg
+    ? "Loaded now · uploaded workout · " + mins + " min"
+    : "Loaded now · " + mins + " min · " + (people===1 ? "solo" : people + " people");
+  $("lpResumeName").textContent = activeName();
+  $("lpResumeBlurb").textContent = activeBlurb();
+
+  const ladder = reg
+    ? (buildLibrary({ regimens: { [activeRegimen.name]: activeRegimen } })[0] || {}).ladder
+    : config.ladder;
+  drawStrip($("lpResumeStrip"), ladder);
+  $("lpStripNote").textContent = reg
+    ? (built.phases.length - 1) + " segments, start to finish"
+    : "one block, then everyone rotates a station";
+
+  // Cap the gear list: past three items it stops being scannable and starts being a paragraph.
+  const allGear = reg ? [] : gearOf(config);
+  const gear = allGear.length > 3 ? allGear.slice(0, 3).concat("+" + (allGear.length - 3) + " more") : allGear;
+  const foot = reg
+    ? ["<span><b>" + (built.phases.length - 1) + "</b> segments</span>"]
+    : [
+        "<span><b>" + sum.stations + "</b> station" + (sum.stations===1 ? "" : "s") + "</span>",
+        "<span><b>" + sum.intervals + "</b> interval" + (sum.intervals===1 ? "" : "s") + " per block</span>",
+        "<span><b>" + sum.blocks + "</b> block" + (sum.blocks===1 ? "" : "s") + "</span>",
+        gear.length ? "<span>" + esc(gear.join(" · ")) + "</span>" : "",
+      ];
+  $("lpResumeFoot").innerHTML = foot.filter(Boolean).join("");
+}
+
+function renderLandingMine(){
+  const rows = buildLibrary({ presets: getPresets(), regimens: getRegimenPresets(), pins: getPins() });
+  const counts = {
+    all: rows.length,
+    pinned: rows.filter(r => r.pinned).length,
+    saved: rows.filter(r => r.origin==="saved").length,
+    uploaded: rows.filter(r => r.origin==="uploaded").length,
+    edited: rows.filter(r => r.origin==="edited").length,
+  };
+  const LABELS = { all:"All", pinned:"Pinned", saved:"Saved setups", uploaded:"Uploaded", edited:"Edited by me" };
+  const nav = $("navMineCount"); if(nav) nav.textContent = counts.all ? String(counts.all) : "";
+
+  // Only offer a filter that would return something, so a chip never leads to an empty list.
+  const keys = counts.all ? ["all","pinned","saved","uploaded","edited"].filter(k => k==="all" || counts[k]) : [];
+  if(!keys.includes(lpFilter)) lpFilter = "all";
+  // One chip is not a filter: hide the row until there is something to narrow down.
+  $("lpFilters").innerHTML = keys.length < 2 ? "" : keys.map(k =>
+    '<button data-f="' + k + '" aria-pressed="' + (k===lpFilter) + '">' + LABELS[k] + " " + counts[k] + "</button>").join("");
+  $("lpFilters").querySelectorAll("button").forEach(b => {
+    b.onclick = () => { lpFilter = b.dataset.f; renderLandingMine(); };
+  });
+
+  const host = $("lpMine");
+  const list = rows.filter(r => lpFilter==="all" ? true : lpFilter==="pinned" ? r.pinned : r.origin===lpFilter);
+  if(!list.length){
+    host.innerHTML = '<div class="lpempty"><b>Nothing saved yet.</b>' +
+      "Customize any workout and save the setup — it shows up here, on every device you sign in on.</div>";
+    return;
+  }
+  const ORIGIN = { saved:"Saved", uploaded:"Uploaded", edited:"Edited" };
+  host.innerHTML = list.map((r,i) =>
+    '<div class="lprow">' +
+      '<div>' +
+        '<div class="nm">' +
+          '<button class="lppin" data-i="' + i + '" aria-pressed="' + r.pinned + '" ' +
+            'aria-label="' + (r.pinned ? "Unpin " : "Pin ") + esc(r.name) + '" title="' + (r.pinned ? "Unpin" : "Pin") + '">' +
+            (r.pinned ? "&#9679;" : "&#9675;") + "</button>" +
+          '<span class="t">' + esc(r.name) + "</span>" +
+          '<span class="lporigin">' + ORIGIN[r.origin] + "</span>" +
+        "</div>" +
+        '<div class="meta"><b>' + r.minutes + "</b> min · <b>" + r.stations + "</b> " +
+          (r.kind==="regimen" ? (r.stations===1 ? "segment" : "segments") : (r.stations===1 ? "station" : "stations")) +
+          (r.kind==="regimen" ? "" : " · " + (r.people===1 ? "solo" : "<b>" + r.people + "</b> people")) +
+          (r.from ? " · from " + esc(r.from) : "") + "</div>" +
+      "</div>" +
+      '<div class="strip sm" data-i="' + i + '" aria-hidden="true"></div>' +
+      '<button class="go" data-i="' + i + '">Start</button>' +
+    "</div>").join("");
+
+  host.querySelectorAll(".strip").forEach(el => drawStrip(el, list[+el.dataset.i].ladder));
+  host.querySelectorAll(".lppin").forEach(b => {
+    b.onclick = () => {
+      const row = list[+b.dataset.i];
+      const pins = getPins();
+      setPins(pins.includes(row.key) ? pins.filter(k => k !== row.key) : pins.concat(row.key));
+      renderLandingMine();
+    };
+  });
+  host.querySelectorAll(".go").forEach(b => {
+    b.onclick = () => startFromLibrary(list[+b.dataset.i]);
+  });
+}
+
+// Start a row from "My workouts". Presets go through the same trust boundary as every other
+// config source; uploaded regimens go through validate + sanitize the same way an upload does.
+function startFromLibrary(row){
+  if(row.kind==="regimen"){
+    const r = getRegimenPresets()[row.name];
+    if(!r) return;
+    adoptRegimen(sanitizeRegimen(clone(r)));
+    build(); setupView(); reset();
+    renderByowActive();
+    showScreen("live"); ensureAudio();
+    return;
+  }
+  const p = getPresets()[row.name];
+  if(!p) return;
+  adoptLadder(); persistRegimen();
+  config = sanitize(migrate(clone(p)));
+  applyTheme(config.theme); persist();
+  build(); setupView(); reset();
+  showScreen("live"); ensureAudio();
+}
+
+function renderLandingTeasers(){
+  const signedIn = !!authUser;
+  // Three that are not already the loaded workout, so the lobby never suggests what you have open.
+  const picks = WORKOUTS.filter(w => w.id !== config.workoutId).slice(0, 3);
+  const nav = $("navCatCount"); if(nav) nav.textContent = String(WORKOUTS.length);
+  $("lpTeasers").innerHTML = picks.map((w,i) => {
+    const locked = !signedIn && WORKOUTS.indexOf(w) >= GUEST_FREE;
+    const sum = summarizeConfig(sanitize(workoutToConfig(w)));
+    return '<button class="lpteaser" data-i="' + i + '">' +
+      '<div class="strip sm" data-i="' + i + '" aria-hidden="true"></div>' +
+      "<h3>" + esc(w.name) + (locked ? ' <span class="lock">&#128274;</span>' : "") + "</h3>" +
+      '<p class="blurb">' + esc(w.blurb || w.category) + "</p>" +
+      '<div class="tmeta">' + sum.minutes + " min · " + sum.stations + " stations" +
+        (locked ? " · sign in to unlock" : "") + "</div>" +
+    "</button>";
+  }).join("");
+  $("lpTeasers").querySelectorAll(".strip").forEach(el =>
+    drawStrip(el, workoutToConfig(picks[+el.dataset.i]).ladder));
+  $("lpTeasers").querySelectorAll(".lpteaser").forEach(b => {
+    b.onclick = () => {
+      const w = picks[+b.dataset.i];
+      if(!authUser && WORKOUTS.indexOf(w) >= GUEST_FREE){ showScreen("welcome"); return; }
+      openCustomize(w);
+    };
+  });
+}
+
+function paintLandingSync(){
+  const note = $("lpSyncNote"), who = $("lpWho");
+  if(!note || !who) return;
+  if(authUser){
+    const first = ((authUser.firstName || authUser.email || "Account").trim().split(/\s+/)[0]) || "Account";
+    who.innerHTML = '<span class="av">' + esc((first[0]||"?").toUpperCase()) + "</span>" +
+      "<span>" + esc(first) + '</span><span class="st' + (_syncState==="err" ? " err" : "") + '"></span>';
+    note.textContent = _syncState==="err"
+      ? "Last sync failed — your workouts are saved on this device."
+      : "Saved to your account. Your workouts follow you to any device you sign in on.";
+  } else {
+    who.innerHTML = '<span class="av">?</span><span>Guest</span>';
+    note.textContent = "Guest mode — everything is saved on this device only.";
+  }
+}
+
+function renderLanding(){
+  const first = authUser ? ((authUser.firstName || "").trim().split(/\s+/)[0]) : "";
+  $("lpGreet").textContent = first ? "Ready when you are, " + first + "." : "Ready when you are.";
+  const rows = buildLibrary({ presets: getPresets(), regimens: getRegimenPresets(), pins: getPins() });
+  $("lpSub").innerHTML = rows.length
+    ? "<b>" + rows.length + "</b> workout" + (rows.length===1 ? "" : "s") + " of your own, plus <b>" +
+      WORKOUTS.length + "</b> in the catalog."
+    : "Nothing saved yet — start from the catalog and keep whatever setup works.";
+  renderLandingHero();
+  renderLandingMine();
+  renderLandingTeasers();
+  paintLandingSync();
+}
+
+// Nav. "Today" is the page you are on; the rest go where their names say.
+$("navToday").onclick = () => { window.scrollTo({top:0, behavior:"instant"}); };
+$("navMine").onclick = () => { document.getElementById("lpMineH").scrollIntoView({block:"start"}); };
+$("navCatalog").onclick = () => showScreen("home");
+$("navSounds").onclick = () => openSettings();
+$("navAccount").onclick = () => { authUser ? openAcctMenu() : showScreen("welcome"); };
+$("lpAllWorkouts").onclick = () => showScreen("home");
+$("homeBack").onclick = () => goLanding();
+// Leaving a live workout pauses it rather than letting cues fire from a screen you can't see.
+// The paused position is still there when you come back.
+$("liveBack").onclick = () => { if(running) start(); goLanding(); };
+$("lpStart").onclick = () => { build(); setupView(); reset(); showScreen("live"); ensureAudio(); };
+$("lpChange").onclick = () => {
+  if(activeKind==="regimen"){ openSettings(); return; }
+  const w = WORKOUTS.find(x => x.id === config.workoutId);
+  // Customize edits a draft; seed it from the live config so "change setup" means this setup.
+  openCustomize(w || null);
+  draft = sanitize(clone(config));
+  renderPeoplePicker(); renderNameList(); renderCustLen(); renderCustomizeSummaries();
+};
+
 // ---------- init ----------
 // `boot` was decided at the top of this file (engine.decideBoot, unit-tested). A stale share hash
 // is cleared; EVERY normal load shows the welcome/sign-in gate -- no silent auto-login.
@@ -861,7 +1118,7 @@ window.addEventListener("storage", (ev) => {
   } catch (e) { console.warn("cross-tab config reload failed", e); }
 });
 
-document.getElementById("guestBtn").onclick = () => { showScreen("home"); };
+document.getElementById("guestBtn").onclick = () => { goLanding(); };
 paintGuestCount();
 
 // Email/password sign-in. Accounts are admin-provisioned (no self-registration). Errors are shown
@@ -880,7 +1137,7 @@ if(loginForm) loginForm.addEventListener("submit", async (ev) => {
     await connectAuth();               // wire auth (idempotent) so onAuthChange drives cloud sync
     await auth.login(email, password, remember);
     const pw = document.getElementById("loginPassword"); if(pw) pw.value = "";
-    showScreen("home");
+    goLanding();
   } catch (e) {
     if(errEl){ errEl.textContent = (e && e.message) ? e.message : "Sign in failed."; errEl.hidden = false; }
   } finally {

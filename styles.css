@@ -426,3 +426,177 @@ body.auth-light::after{ display:none; }
 .confirmcard .crow{display:flex;gap:10px;justify-content:flex-end}
 .confirmcard .crow .ambtn{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:13px;width:auto;padding:9px 18px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
 .confirmcard .crow .ambtn.danger{color:#ff6b6b;border-color:#5a2a2a}
+
+/* ===========================================================================
+   LANDING (screen-landing) — the lobby between sign-in and the catalog.
+   Runs on the light surface: body.auth-light already redefines --bg/--ink/--line
+   etc., so everything below reads from those tokens and needs no second palette.
+
+   DATA COLOR. The interval strip's work/rest marks are steel and rust, NOT the
+   brand lime/amber: measured against a colorblindness model, lime #6f9b16 vs
+   amber #e08a1e separate by only ΔE 0.7 under protanopia — indistinguishable.
+   Steel/rust measure ΔE 25.2. Brand lime stays on the mark and the dark timer,
+   where nothing has to be told apart from it.
+   ========================================================================= */
+body.auth-light{
+  --work-mark:#1565c0;
+  --work-soft:#5b9ae0;
+  --rest-mark:#c2410c;
+  --board:#f5f6f4;
+  --line-soft:#eef0f2;
+}
+
+.lp{ width:100%; max-width:1180px; margin:0 auto; display:grid;
+  grid-template-columns:210px minmax(0,1fr); gap:38px; align-items:start; min-width:0; }
+
+/* ---- left navigation ---- */
+/* min-width:0 matters: the nav's chip row is a nowrap horizontal scroller, and without this its
+   min-content width becomes the grid column's minimum and pushes the whole page wider than the
+   phone screen. */
+.lpnav{ position:sticky; top:16px; padding-block:12px; display:flex; flex-direction:column; gap:24px;
+  min-height:70vh; min-width:0; }
+.lpmark{ display:flex; align-items:center; gap:9px; }
+.lpmark svg{ width:28px; height:28px; flex:none; }
+.lpmark b{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:18px; }
+.lpmark span{ font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:18px; color:var(--dim); }
+.lpnavlist{ display:flex; flex-direction:column; gap:1px; }
+.lpnavitem{ display:flex; align-items:center; gap:10px; padding:8px 10px 8px 0; background:none; border:0;
+  font-family:'Barlow',sans-serif; font-size:15px; font-weight:500; color:var(--dim); cursor:pointer; text-align:left; }
+.lpnavitem .tick{ width:3px; height:16px; border-radius:2px; background:transparent; flex:none; }
+.lpnavitem:hover{ color:var(--ink); }
+.lpnavitem[aria-current="page"]{ color:var(--ink); font-weight:600; }
+.lpnavitem[aria-current="page"] .tick{ background:var(--ink); }
+.lpnavitem .lpcount{ margin-left:auto; font-family:'Barlow Condensed',sans-serif; font-size:13px; color:var(--dim);
+  font-variant-numeric:tabular-nums; }
+.lpnavrule{ height:1px; background:var(--line); margin:3px 0; }
+.lpnavfoot{ margin-top:auto; display:flex; flex-direction:column; gap:9px; }
+.lpwho{ display:flex; align-items:center; gap:9px; font-size:14px; color:var(--ink); }
+.lpwho .av{ width:26px; height:26px; border-radius:50%; background:#6f9b16; color:#fff; display:grid;
+  place-items:center; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:14px; flex:none; }
+.lpwho .st{ margin-left:auto; width:7px; height:7px; border-radius:50%; background:#6f9b16; flex:none; }
+.lpwho .st.err{ background:#e08a1e; }
+.lpnavnote{ font-size:12.5px; color:var(--dim); line-height:1.45; }
+
+/* ---- page ---- */
+.lpmain{ padding-block:12px 40px; min-width:0; }
+.lpgreet{ font-family:'Barlow',sans-serif; font-size:28px; font-weight:600; line-height:1.15;
+  letter-spacing:-.015em; margin:0; }
+.lpsub{ margin:8px 0 0; color:var(--dim); font-size:14.5px; }
+.lpsub b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+.lp section{ margin-top:34px; }
+.lpsechead{ display:flex; align-items:baseline; gap:14px; margin-bottom:13px; }
+.lpsechead h2{ margin:0; font-size:17px; font-weight:600; font-family:'Barlow',sans-serif; }
+.lpmore{ margin-left:auto; background:none; border:0; border-bottom:1px solid var(--line);
+  font-size:14px; color:var(--dim); cursor:pointer; padding:0 0 1px; }
+.lpmore:hover{ color:var(--ink); border-color:var(--work-mark); }
+
+/* ---- resume block: the one bordered object you are meant to act on ---- */
+.lpresume{ border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--panel); }
+.lpresume-top{ padding:20px 22px 16px; display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+.lpresume-id{ flex:1 1 260px; min-width:230px; }
+.lpwhen{ font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13.5px; color:var(--dim);
+  letter-spacing:.03em; }
+.lpresume h3{ margin:3px 0 0; font-size:25px; font-weight:600; letter-spacing:-.02em; line-height:1.12;
+  font-family:'Barlow',sans-serif; }
+.lpresume p{ margin:8px 0 0; color:var(--dim); font-size:14.5px; max-width:52ch; }
+.lpresume-act{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.lpbtn{ border-radius:999px; padding:12px 22px; font-family:'Barlow',sans-serif; font-weight:600; font-size:15px;
+  letter-spacing:0; text-transform:none; border:1px solid var(--ink); background:var(--ink); color:#fff; cursor:pointer; }
+.lpbtn:hover{ background:#1d2236; border-color:#1d2236; }
+/* NOT .ghost — the dark app defines a global `button.ghost` in condensed uppercase. */
+.lpbtn.lpghost{ background:transparent; color:var(--ink); border-color:var(--line); }
+.lpbtn.lpghost:hover{ border-color:#c8ccd4; background:var(--board); }
+.lpresume-strip{ padding:2px 22px 18px; }
+.lpresume-foot{ border-top:1px solid var(--line-soft); background:var(--board); padding:11px 22px;
+  display:flex; gap:20px; flex-wrap:wrap; color:var(--dim); font-size:13.5px; }
+.lpresume-foot b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+
+/* ---- interval strip: width is seconds, work-bar HEIGHT is seconds on ---- */
+.strip{ display:flex; align-items:flex-end; gap:2px; height:44px; }
+.strip .work{ background:var(--work-mark); border-radius:4px 4px 0 0; min-width:2px; }
+.strip .rest{ border-bottom:2px solid var(--rest-mark); align-self:flex-end; height:2px; min-width:2px; }
+.strip.sm{ height:22px; gap:1.5px; }
+.strip.sm .work{ border-radius:2px 2px 0 0; }
+.strip.lg{ height:60px; gap:3px; }
+.stripkey{ display:flex; gap:15px; flex-wrap:wrap; margin-top:9px; color:var(--dim); font-size:12.5px;
+  align-items:center; }
+.stripkey i{ display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--work-mark);
+  margin-right:6px; vertical-align:-1px; }
+.stripkey i.r{ height:2px; border-radius:0; background:var(--rest-mark); vertical-align:3px; }
+
+/* ---- filters ---- */
+.lpchips{ display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+.lpchips button{ border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:6px 14px;
+  font-family:'Barlow',sans-serif; font-size:13.5px; font-weight:500; color:var(--dim); cursor:pointer; }
+.lpchips button[aria-pressed="true"]{ border-color:var(--ink); color:var(--ink); font-weight:600; }
+.lpchips button:hover{ color:var(--ink); }
+
+/* ---- my-workouts rows ---- */
+.lprows{ display:flex; flex-direction:column; }
+.lprow{ display:grid; grid-template-columns:minmax(0,1fr) 124px auto; gap:16px; align-items:center;
+  padding:13px 2px; border-top:1px solid var(--line-soft); }
+.lprow:first-child{ border-top:0; }
+.lprow .nm{ display:flex; align-items:center; gap:8px; font-weight:600; font-size:15.5px; min-width:0; }
+.lprow .nm .t{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lprow .meta{ color:var(--dim); font-size:13.5px; margin-top:2px; }
+.lprow .meta b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+.lprow .go{ border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:7px 16px;
+  font-family:'Barlow',sans-serif; font-size:14px; font-weight:600; color:var(--ink); cursor:pointer; }
+.lprow .go:hover{ border-color:var(--ink); }
+.lppin{ border:0; background:none; padding:0; line-height:1; font-size:15px; cursor:pointer; color:#c9ced6; flex:none; }
+.lppin[aria-pressed="true"]{ color:var(--rest-mark); }
+.lporigin{ font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:12px; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--dim); border:1px solid var(--line); border-radius:4px; padding:1px 6px; flex:none; }
+.lpempty{ border:1px dashed var(--line); border-radius:14px; padding:18px; color:var(--dim); font-size:14px; }
+.lpempty b{ display:block; color:var(--ink); font-weight:600; margin-bottom:4px; }
+
+/* ---- catalog teasers ---- */
+.lpteasers{ display:grid; grid-template-columns:repeat(auto-fit,minmax(214px,1fr)); gap:13px; }
+.lpteaser{ border:1px solid var(--line); border-radius:14px; padding:15px; background:var(--panel);
+  display:flex; flex-direction:column; gap:9px; text-align:left; align-items:stretch; cursor:pointer;
+  font-family:'Barlow',sans-serif; color:var(--ink); }
+.lpteaser:hover{ border-color:#c8ccd4; }
+.lpteaser h3{ margin:0; font-size:16px; font-weight:600; }
+.lpteaser .blurb{ color:var(--dim); font-size:13.5px; line-height:1.45; flex:1; margin:0; }
+.lpteaser .tmeta{ color:var(--dim); font-size:13px; font-variant-numeric:tabular-nums; }
+.lpteaser .lock{ font-size:13px; }
+
+/* ---- back to the lobby from the catalog ---- */
+.homeback{ background:none; border:0; color:var(--dim); font-family:'Barlow',sans-serif; font-size:14px;
+  font-weight:600; cursor:pointer; padding:0 8px 0 0; text-transform:none; letter-spacing:0; }
+.homeback:hover{ color:var(--ink); }
+#screen-live .head .homeback{ margin-right:2px; }
+
+@media (max-width:840px){
+  .lp{ grid-template-columns:minmax(0,1fr); gap:10px; }
+  .lpnav{ position:static; min-height:0; gap:14px; }
+  .lpnavlist{ flex-direction:row; overflow-x:auto; gap:5px; padding-bottom:4px; min-width:0;
+    scrollbar-width:none; }
+  .lpnavlist::-webkit-scrollbar{ display:none; }
+  .lpnavitem{ padding:7px 13px; border:1px solid var(--line); border-radius:999px; white-space:nowrap; }
+  .lpnavitem .tick,.lpnavitem .lpcount{ display:none; }
+  .lpnavrule,.lpnavfoot{ display:none; }
+  .lprow{ grid-template-columns:minmax(0,1fr) auto; }
+  .lprow .strip{ display:none; }
+  .lpgreet{ font-size:24px; }
+}
+@media (prefers-reduced-motion:no-preference){
+  .strip .work{ animation:striprise .45s cubic-bezier(.2,.7,.3,1) backwards; }
+}
+@keyframes striprise{ from{ transform:scaleY(.2); transform-origin:bottom; } to{ transform:scaleY(1); } }
+
+/* ---------------------------------------------------------------------------
+   Dark overlays on a light surface. The settings sheet and the account menu paint
+   their own dark chrome, but their TEXT reads var(--ink)/var(--dim) — which
+   body.auth-light has redefined to near-black. Opened from the welcome screen or
+   the landing lobby they were dark-on-dark and unreadable (the same failure the
+   sign-out path used to hit). Re-declare the dark tokens on the overlay itself, so
+   the two states can't desync: the surface and its text come from one set.
+   --------------------------------------------------------------------------- */
+body.auth-light #sheet .sheetcard,
+body.auth-light .acctmenu,
+body.auth-light .confirmcard{
+  --bg:#0b0c0e; --panel:#15171c; --panel2:#1d2026;
+  --ink:#f5f4ee; --dim:#7d828c; --line:#2a2e36;
+  color:var(--ink);
+}

@@ -107,7 +107,9 @@ const MAX_STATIONS = 40, MAX_LADDER = 60;
 const BOOL_FIELDS = ["voice", "ticks", "haptics", "keepAwake", "halfChime"];
 
 export function sanitize(c) {
-  c.stations = (c.stations || []).slice(0, MAX_STATIONS).map(s0 => {
+  // Array.isArray, not `|| []`: a crafted config can carry a STRING here, and "x".slice()
+  // returns a string whose .map is undefined — sanitize would throw instead of sanitizing.
+  c.stations = (Array.isArray(c.stations) ? c.stations : []).slice(0, MAX_STATIONS).map(s0 => {
     // Coerce non-object entries (null / string / number from a crafted config) so
     // reading .ex/.gear/... can never throw a TypeError at module load.
     const s = (s0 && typeof s0 === "object") ? s0 : {};
@@ -119,7 +121,7 @@ export function sanitize(c) {
     };
   });
   if (!c.stations.length) c.stations = [{ ex: "Exercise", gear: "", rep: "" }];
-  c.ladder = (c.ladder || []).slice(0, MAX_LADDER).map(p => {
+  c.ladder = (Array.isArray(c.ladder) ? c.ladder : []).slice(0, MAX_LADDER).map(p => {
     const pair = Array.isArray(p) ? p : [];
     return [
       Math.max(1, parseInt(pair[0]) || 1),
@@ -134,7 +136,7 @@ export function sanitize(c) {
   c.volume = Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : DEFAULTS.volume;
   c.people = clampPeople(c.people, c.stations.length);
   // Coerce every name to a string so app.js personLabel()'s .trim() can never throw.
-  c.personNames = (c.personNames || []).slice(0, c.people)
+  c.personNames = (Array.isArray(c.personNames) ? c.personNames : []).slice(0, c.people)
     .map(n => typeof n === "string" ? n : "");
   // Booleans are part of the trust boundary too: a crafted config can carry voice:"yes" (truthy
   // but not a boolean) and a legacy one can omit keepAwake entirely. Coerce, defaulting when absent.
@@ -350,4 +352,35 @@ export function advancePhases(phases, idx, remaining) {
     if (remaining <= 0) skipped.push(idx);
   }
   return { idx, remaining, finished: false, skipped };
+}
+
+// Compact summary of a sanitized config, for landing rows and catalog cards. Derived from
+// buildPhases so it can never disagree with what the timer will actually run.
+export function summarizeConfig(config) {
+  const r = buildPhases(config);
+  return {
+    totalSec: r.total,
+    minutes: Math.max(1, Math.round(r.total / 60)),
+    blocks: r.TOTBLOCKS,
+    stations: r.N,
+    intervals: r.LADN,
+    people: config.people || 1,
+  };
+}
+
+// Where a saved preset came from, for the "My workouts" filter. A preset that names a catalog
+// workout but no longer matches its circuit was edited; anything else is just a saved setup.
+export function classifyPreset(preset, baseline) {
+  if (!baseline) return "saved";
+  return sameCircuit(preset, baseline) ? "saved" : "edited";
+}
+
+// Distinct gear across a config's stations, in station order ("25 lb · Rope · Vest").
+export function gearOf(config) {
+  const seen = [];
+  (config.stations || []).forEach(s => {
+    const g = (s && s.gear || "").trim();
+    if (g && !seen.includes(g)) seen.push(g);
+  });
+  return seen;
 }

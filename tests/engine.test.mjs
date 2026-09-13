@@ -310,3 +310,66 @@ test("enc output is byte-identical to the legacy encoder", () => {
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   assert.equal(encG11(cfg), legacy);
 });
+
+// ---------- landing page: config summaries and preset classification ----------
+import { summarizeConfig, classifyPreset, gearOf } from "../engine.js";
+
+const ladderCfg = {
+  prep: 5, people: 2, targetMin: 0,
+  ladder: [[60, 30], [50, 25], [40, 20], [30, 15], [20, 10]],
+  stations: [{ ex: "A", gear: "25 lb" }, { ex: "B", gear: "Rope" }, { ex: "C", gear: "25 lb" }],
+};
+
+test("summarizeConfig derives its numbers from buildPhases", () => {
+  const s = summarizeConfig(ladderCfg);
+  // 3 stations, one 300s block each => 900s = 15 min. prep is not counted as work.
+  assert.equal(s.totalSec, 900);
+  assert.equal(s.minutes, 15);
+  assert.equal(s.blocks, 3);
+  assert.equal(s.stations, 3);
+  assert.equal(s.intervals, 5);
+  assert.equal(s.people, 2);
+});
+
+test("summarizeConfig never reports a zero-minute workout", () => {
+  const s = summarizeConfig({ prep: 0, people: 1, targetMin: 0, ladder: [[5, 0]], stations: [{ ex: "A" }] });
+  assert.equal(s.minutes, 1);
+});
+
+test("classifyPreset calls an unchanged catalog circuit a saved setup", () => {
+  const base = { stations: [{ ex: "A" }], ladder: [[30, 15]] };
+  const preset = { stations: [{ ex: "A" }], ladder: [[30, 15]], people: 4 };
+  assert.equal(classifyPreset(preset, base), "saved");
+});
+
+test("classifyPreset calls a changed catalog circuit edited", () => {
+  const base = { stations: [{ ex: "A" }, { ex: "B" }], ladder: [[30, 15]] };
+  const preset = { stations: [{ ex: "A" }], ladder: [[30, 15]] };
+  assert.equal(classifyPreset(preset, base), "edited");
+});
+
+test("classifyPreset falls back to saved when the workout is not in the catalog", () => {
+  assert.equal(classifyPreset({ stations: [], ladder: [] }, null), "saved");
+});
+
+test("gearOf lists distinct gear in station order", () => {
+  assert.deepEqual(gearOf(ladderCfg), ["25 lb", "Rope"]);
+  assert.deepEqual(gearOf({ stations: [{ ex: "A" }, { ex: "B", gear: "  " }] }), []);
+  assert.deepEqual(gearOf({}), []);
+});
+
+test("sanitize survives non-array stations/ladder/personNames from a crafted link", () => {
+  // "nope".slice() is a string, and a string has no .map — this used to throw at boot,
+  // which a hostile #c= link could trigger.
+  const c = sanitizeG10({ stations: "nope", ladder: "nope", personNames: "nope", people: 3 });
+  assert.deepEqual(c.stations, [{ ex: "Exercise", gear: "", rep: "" }]);
+  assert.deepEqual(c.ladder, [[30, 15]]);
+  assert.deepEqual(c.personNames, []);
+  assert.equal(c.people, 1);   // clamped to the one surviving station
+});
+
+test("sanitize survives a numeric ladder and object stations", () => {
+  const c = sanitizeG10({ stations: { a: 1 }, ladder: 7 });
+  assert.equal(c.stations.length, 1);
+  assert.deepEqual(c.ladder, [[30, 15]]);
+});

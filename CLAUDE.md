@@ -38,7 +38,10 @@ cd server && npm run create-admin  # provision a user (there is no self-registra
   refreshes once on a 401 (single-flight), surfaces the server's `error` message.
 - `auth.js` — email/password JWT sessions. Access token in memory only; the rotating refresh token
   goes to `localStorage` when "Remember me" is on, else `sessionStorage`.
-- `app.js` — all DOM/UI/timer/boot/sync orchestration. **Untested**; be extra careful here.
+- `app.js` — all DOM/UI/timer/boot/sync orchestration, including the landing lobby
+  (`renderLanding()` and friends). **Untested**; be extra careful here.
+- Landing rows come from `buildLibrary({presets, regimens, pins})` in catalog.js — pure and tested.
+  Pins live in `ladder.pins` locally and in the cloud presets doc under `store.PINS_NS`.
 - Import direction is strictly: app.js → (engine, catalog, store, auth) → api. Never make
   engine/catalog/store import app.
 - `server/src/` — `routes/ → controllers/ → models/`, with `middleware/auth.js` (`verifyJWT`)
@@ -46,6 +49,9 @@ cd server && npm run create-admin  # provision a user (there is no self-registra
 - Tests: client `tests/*.test.mjs` (`node:test` + `node:assert/strict`); server `server/tests/`
   (`vitest` + `supertest` + `mongodb-memory-server`). New pure logic gets a test; put logic in
   engine.js (or extract from app.js) to make it testable.
+- **Landing CSS is namespaced `lp*`** because the dark app has unscoped rules that would reach into
+  it — `button.ghost` (condensed uppercase) and `.count` (the timer's absolutely-positioned
+  countdown overlay) both bit during the build. Grep styles.css before reusing a generic class name.
 - Style: compact vanilla JS, `const $ = id => document.getElementById(id)`, string-built
   `innerHTML` with the local `esc()` helper. **Every dynamic value interpolated into HTML must go
   through `esc()`**; `esc()` escapes both quote styles, but double-quoted attributes stay the convention.
@@ -107,9 +113,12 @@ already used by app.js — use them rather than re-deriving the logic inline:
   user's password). If sign-in fails in a new environment, check that a user exists before
   suspecting the code.
 - **Welcome screen always shows on normal boot** — deliberate ("no silent auto-login"). Don't "fix" it.
-- **The welcome screen is the app's one light surface.** `body.auth-light` is a scoped token
-  override toggled in exactly one place, inside `showScreen()`. Never move those tokens into
-  `:root`, and never toggle the class anywhere else — the two states would desync.
+- **Welcome and landing are the app's light surfaces.** `body.auth-light` is a scoped token
+  override toggled in exactly one place, inside `showScreen()` (`name === "welcome" || name === "landing"`).
+  Never move those tokens into `:root`, and never toggle the class anywhere else — the two states
+  would desync. Dark overlays that can open over a light screen (settings sheet, account menu,
+  confirm dialog) re-declare the dark tokens on themselves; add any new overlay to that list or
+  its text will be dark-on-dark.
 - **`prep: 0` creates a 0-duration phase**; `render()` guards a 0/0 NaN for the ring. Preserve that guard.
 - **Settings sheet serves two flows** distinguished only by `sheetFromCustomize`: gear-button →
   edits `config` (Apply = sanitize+persist+rebuild); customize screen → edits the customize `draft`

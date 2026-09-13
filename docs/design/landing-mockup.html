@@ -1,0 +1,878 @@
+<title>Ladder Circuit Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===========================================================================
+   Landing / history design mockup for Ladder Circuit Timer.
+   Committed to ONE visual world on purpose: this page IS the spec for the app's
+   light surface (body.auth-light), so it paints light explicitly rather than
+   following the viewer's theme.
+
+   DATA COLOR (changed this pass): work/rest marks were brand lime #6f9b16 and
+   amber #e08a1e. That pair measures ΔE 0.7 under protanopia — a red-green
+   colorblind viewer cannot tell work from rest at all. Steel #1565c0 / rust
+   #c2410c measures ΔE 25.2 protan, 31.9 normal, and clears contrast, chroma and
+   lightness. Brand lime is demoted to the app mark and the dark timer, where it
+   never has to be told apart from anything.
+   =========================================================================== */
+:root{
+  --paper:#ffffff;
+  --board:#f5f6f4;
+  --ink:#101322;
+  --ink-2:#2b3040;
+  --dim:#6b7280;
+  --line:#e3e5ea;
+  --line-soft:#eef0f2;
+  --lime:#6f9b16;       /* brand mark only */
+  --night:#0b0c0e;
+  --radius:14px;
+  --nav-w:220px;
+
+  /* data marks — see the note above */
+  --work:#1565c0;
+  --work-soft:#5b9ae0;
+  --rest:#c2410c;
+  color-scheme: light;
+}
+body[data-strip="moss"]{ --work:#4a6b1f; --work-soft:#89a862; --rest:#b8730f; }
+
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--work);outline-offset:2px;border-radius:4px}
+
+/* ---------- mockup chrome (not part of the app) ---------- */
+.mock{border-bottom:1px solid var(--line);background:var(--board)}
+.mock-in{max-width:1180px;margin:0 auto;padding-block:12px;padding-inline:20px;
+  display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.mock-tag{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13px;
+  letter-spacing:.06em;color:var(--dim);text-transform:uppercase}
+.swatchpick{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--dim)}
+.swatchpick button{border:1px solid var(--line);background:var(--paper);border-radius:999px;
+  padding:4px 11px 4px 6px;font-size:13px;display:inline-flex;align-items:center;gap:6px;color:var(--dim)}
+.swatchpick button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);font-weight:600}
+.swatchpick .dot{width:9px;height:9px;border-radius:2px;display:inline-block}
+.mock-tabs{display:flex;gap:6px;margin-left:auto}
+.mock-tabs button{background:transparent;border:1px solid transparent;border-radius:999px;
+  padding:6px 14px;font-weight:600;font-size:14px;color:var(--dim)}
+.mock-tabs button[aria-selected="true"]{background:var(--paper);border-color:var(--line);color:var(--ink)}
+
+.shell{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:0 56px;
+  display:grid;grid-template-columns:var(--nav-w) minmax(0,1fr);gap:40px}
+
+/* ---------- left navigation ---------- */
+.nav{position:sticky;top:0;align-self:start;padding-block:28px;display:flex;flex-direction:column;gap:26px}
+.mark{display:flex;align-items:center;gap:10px}
+.mark svg{width:30px;height:30px;flex:none}
+.mark b{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:19px;letter-spacing:.01em}
+.mark span{color:var(--dim);font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:19px}
+
+.navlist{display:flex;flex-direction:column;gap:1px}
+.navlist a{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 0;
+  text-decoration:none;font-weight:500;color:var(--dim);border-radius:8px}
+.navlist a .tick{width:3px;height:16px;border-radius:2px;background:transparent;flex:none}
+.navlist a:hover{color:var(--ink)}
+.navlist a[aria-current="page"]{color:var(--ink);font-weight:600}
+.navlist a[aria-current="page"] .tick{background:var(--ink)}
+.navlist .count{margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--dim);
+  font-variant-numeric:tabular-nums}
+.navrule{height:1px;background:var(--line);margin:2px 0}
+
+.navfoot{margin-top:auto;display:flex;flex-direction:column;gap:10px}
+.who{display:flex;align-items:center;gap:9px;font-size:14px}
+.who .av{width:26px;height:26px;border-radius:50%;background:var(--lime);color:#fff;
+  display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px}
+.who .st{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--lime)}
+.navnote{font-size:12.5px;color:var(--dim);line-height:1.45}
+
+/* ---------- page content ---------- */
+.page{padding-block:28px 0;min-width:0}
+.greet{font-size:29px;font-weight:600;line-height:1.15;letter-spacing:-.015em;text-wrap:balance}
+.greet-sub{margin:8px 0 0;color:var(--dim);font-size:14.5px}
+.greet-sub b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.greet-sub a{color:var(--dim);border-bottom:1px solid var(--line)}
+.greet-sub a:hover{color:var(--ink);border-color:var(--work)}
+
+section{margin-top:38px}
+.sechead{display:flex;align-items:baseline;gap:14px;margin-bottom:14px}
+.sechead h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.005em}
+.sechead .more{margin-left:auto;font-size:14px;color:var(--dim);text-decoration:none;border-bottom:1px solid var(--line)}
+.sechead .more:hover{color:var(--ink);border-color:var(--work)}
+
+/* ---------- the resume block ---------- */
+.resume{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--paper)}
+.resume-top{padding:22px 24px 18px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+.resume-id{min-width:230px;flex:1 1 260px}
+.resume-when{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13.5px;
+  color:var(--dim);letter-spacing:.03em}
+.resume h3{margin:3px 0 0;font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1.12}
+.resume p{margin:8px 0 0;color:var(--dim);font-size:14.5px;max-width:52ch}
+.resume-act{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border-radius:999px;padding:12px 22px;font-weight:600;font-size:15px;border:1px solid var(--ink);
+  background:var(--ink);color:#fff}
+.btn:hover{background:#1d2236;border-color:#1d2236}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{border-color:#c8ccd4;background:var(--board)}
+.btn.sm{padding:8px 16px;font-size:14px}
+
+.resume-strip{padding:4px 24px 20px}
+.resume-foot{border-top:1px solid var(--line-soft);background:var(--board);
+  padding:12px 24px;display:flex;gap:22px;flex-wrap:wrap;color:var(--dim);font-size:13.5px}
+.resume-foot b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ---------- the interval strip: work height = seconds on ---------- */
+.strip{display:flex;align-items:flex-end;gap:2px;height:44px}
+.strip .work{background:var(--work);border-radius:4px 4px 0 0;min-width:2px}
+.strip .rest{border-bottom:2px solid var(--rest);align-self:flex-end;height:2px;min-width:2px}
+.strip.sm{height:22px;gap:1.5px}
+.strip.sm .work{border-radius:2px 2px 0 0}
+.strip.lg{height:64px;gap:3px}
+.strip-key{display:flex;gap:16px;margin-top:9px;color:var(--dim);font-size:12.5px;align-items:center;flex-wrap:wrap}
+.strip-key i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--work);margin-right:6px;vertical-align:-1px}
+.strip-key i.r{height:2px;border-radius:0;background:var(--rest);vertical-align:3px}
+
+/* ---------- filter chips ---------- */
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.chips button{border:1px solid var(--line);background:var(--paper);border-radius:999px;
+  padding:6px 14px;font-size:13.5px;font-weight:500;color:var(--dim)}
+.chips button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);font-weight:600}
+.chips button:hover{color:var(--ink)}
+
+/* ---------- list rows ---------- */
+.rows{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:minmax(0,1fr) 132px auto;gap:18px;align-items:center;
+  padding:14px 2px;border-top:1px solid var(--line-soft)}
+.row:first-child{border-top:0}
+.row .nm{font-weight:600;font-size:15.5px;display:flex;align-items:center;gap:8px;min-width:0}
+.row .nm span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .meta{color:var(--dim);font-size:13.5px;margin-top:2px}
+.row .meta b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.row .go{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:7px 16px;
+  font-size:14px;font-weight:600}
+.row .go:hover{border-color:var(--ink)}
+.pin{border:0;background:transparent;padding:0;line-height:1;color:var(--rest);font-size:15px}
+.pin[aria-pressed="false"]{color:#c9ced6}
+.pin:hover{color:var(--rest)}
+.origin{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12px;letter-spacing:.05em;
+  color:var(--dim);border:1px solid var(--line);border-radius:4px;padding:1px 6px;text-transform:uppercase;flex:none}
+.empty{border:1px dashed var(--line);border-radius:var(--radius);padding:20px;color:var(--dim);font-size:14px}
+.empty b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px}
+
+/* ---------- catalog teasers ---------- */
+.teasers{display:grid;grid-template-columns:repeat(auto-fit,minmax(216px,1fr));gap:14px}
+.teaser{border:1px solid var(--line);border-radius:var(--radius);padding:16px;background:var(--paper);
+  display:flex;flex-direction:column;gap:10px;text-align:left;align-items:stretch}
+.teaser:hover{border-color:#c8ccd4}
+.teaser h3{margin:0;font-size:16px;font-weight:600}
+.teaser .blurb{color:var(--dim);font-size:13.5px;line-height:1.45;flex:1}
+.teaser .tmeta{color:var(--dim);font-size:13px;font-variant-numeric:tabular-nums}
+
+/* ---------- discover ---------- */
+.discover{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center;
+  background:var(--board);border-radius:var(--radius);padding:20px 22px}
+.discover h3{margin:0 0 6px;font-size:17px;font-weight:600}
+.discover p{margin:0;color:var(--dim);font-size:14px;max-width:60ch}
+.discover .src{margin-top:10px;font-size:12.5px;color:var(--dim)}
+
+/* ---------- history: weekly minutes chart ---------- */
+.chartwrap{border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px 16px;background:var(--paper)}
+.chart-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.chart-head h3{margin:0;font-size:16px;font-weight:600}
+.chart-head .hint{color:var(--dim);font-size:13px;margin-left:auto}
+.chart{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px}
+.yaxis{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;
+  height:168px;font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.plot{position:relative;height:168px}
+.grid{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between}
+.grid i{height:1px;background:var(--line-soft)}
+.grid i:last-child{background:var(--line)}
+.bars{position:absolute;inset:0;display:flex;align-items:flex-end;gap:2px}
+.bar{flex:1;position:relative;display:flex;flex-direction:column;justify-content:flex-end;height:100%;
+  background:none;border:0;padding:0;min-width:0}
+.bar .fill{background:var(--work-soft);border-radius:4px 4px 0 0;width:100%;transition:background .12s}
+.bar.now .fill{background:var(--work)}
+/* An honest zero: a week with no sessions still gets a visible baseline tick, so the gap
+   reads as "nothing here" rather than as a rendering failure. */
+.bar.zero .fill{background:#d5d9dd;height:3px!important;border-radius:0}
+.bar:hover .fill,.bar:focus-visible .fill{background:var(--work)}
+.bar .lab{position:absolute;top:-18px;left:0;right:0;text-align:center;font-size:11.5px;
+  font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+.xaxis{grid-column:2;display:flex;gap:2px;margin-top:8px}
+.xaxis span{flex:1;text-align:center;font-size:11px;color:var(--dim);min-width:0;overflow:hidden;white-space:nowrap}
+.tip{position:absolute;z-index:5;background:var(--ink);color:#fff;border-radius:8px;padding:7px 10px;
+  font-size:12.5px;line-height:1.35;pointer-events:none;transform:translate(-50%,-100%);white-space:nowrap;
+  box-shadow:0 6px 18px rgba(16,19,34,.2)}
+.tip b{font-variant-numeric:tabular-nums}
+.tablelink{margin-top:12px;border-top:1px solid var(--line-soft);padding-top:10px}
+.tablelink summary{font-size:13.5px;color:var(--dim);cursor:pointer}
+.tablelink table{border-collapse:collapse;margin-top:10px;font-size:13.5px;width:100%}
+.tablelink th,.tablelink td{text-align:left;padding:5px 10px 5px 0;border-bottom:1px solid var(--line-soft);
+  font-variant-numeric:tabular-nums}
+.tablelink th{font-weight:600;color:var(--dim);font-size:12.5px}
+
+/* ---------- history: session log ---------- */
+.daygroup{margin-top:26px}
+.dayhead{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13.5px;color:var(--dim);
+  letter-spacing:.04em;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.sess{border-top:1px solid var(--line-soft);padding:13px 2px}
+.sess:first-of-type{border-top:0}
+.sess-top{display:grid;grid-template-columns:64px minmax(0,1fr) 110px auto;gap:16px;align-items:center}
+.sess .time{font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--dim);font-size:14px;
+  font-variant-numeric:tabular-nums}
+.sess .nm{font-weight:600;font-size:15.5px}
+.sess .meta{color:var(--dim);font-size:13.5px;margin-top:2px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sess .meta b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.state{font-size:12.5px;font-weight:600;border-radius:999px;padding:2px 9px;border:1px solid}
+.state.done{color:#1a6b3c;border-color:#bfe3cd;background:#f1faf4}
+.state.part{color:#8a5a00;border-color:#eddfbe;background:#fdf8ee}
+.expand{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:6px 14px;font-size:13.5px}
+.expand:hover{border-color:var(--ink)}
+.sess-detail{margin:12px 0 2px 80px;padding:14px 16px;background:var(--board);border-radius:10px;
+  display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.sess-detail h4{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--dim)}
+.sess-detail ul{margin:0;padding:0;list-style:none;font-size:14px}
+.sess-detail li{padding:3px 0;display:flex;gap:10px;justify-content:space-between;border-bottom:1px solid #e9ebe8}
+.sess-detail li:last-child{border-bottom:0}
+.sess-detail li span{color:var(--dim);font-variant-numeric:tabular-nums}
+
+/* ---------- workout detail ---------- */
+.back{background:none;border:0;padding:0;color:var(--dim);font-size:14px;font-weight:500}
+.back:hover{color:var(--ink)}
+.detail-head{margin-top:16px}
+.detail-head h1{margin:0;font-size:36px;font-weight:600;letter-spacing:-.025em;line-height:1.08;text-wrap:balance}
+.detail-head .lede{margin:10px 0 0;font-size:17px;max-width:56ch;line-height:1.45}
+.facts{display:flex;gap:26px;flex-wrap:wrap;margin-top:18px;padding-block:14px;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.fact .k{font-size:12.5px;color:var(--dim)}
+.fact .v{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:19px;
+  font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.yours{margin-top:20px;border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center}
+.yours h3{margin:0 0 4px;font-size:15px;font-weight:600}
+.yours p{margin:0;color:var(--dim);font-size:14px}
+.yours p b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.spark{display:flex;align-items:flex-end;gap:3px;height:34px}
+.spark i{width:7px;background:var(--work-soft);border-radius:2px 2px 0 0}
+.spark i.last{background:var(--work)}
+.prose{max-width:64ch}
+.prose h2{font-size:17px;font-weight:600;margin:30px 0 8px}
+.prose p{margin:0 0 10px;color:#2b3040}
+.stations{display:flex;flex-direction:column;margin-top:6px}
+.station{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:14px;align-items:baseline;
+  padding:11px 0;border-top:1px solid var(--line-soft)}
+.station .n{font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--dim);
+  font-variant-numeric:tabular-nums}
+.station .ex{font-weight:600}
+.station .sub{color:var(--dim);font-size:13.5px}
+.station a{color:var(--dim);font-size:13px}
+.detail-cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px;padding-top:20px;border-top:1px solid var(--line)}
+.night{margin-top:26px;background:var(--night);border-radius:var(--radius);padding:18px 22px;color:#f5f4ee;
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.night .big{font-family:'Anton',sans-serif;font-size:40px;line-height:.9;color:#c6f24e}
+.night p{margin:0;color:#9aa0aa;font-size:13.5px;max-width:44ch}
+
+/* ---------- design notes ---------- */
+.notes{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:0 60px}
+.notes details{border-top:1px solid var(--line);padding:16px 0}
+.notes summary{font-weight:600;cursor:pointer;font-size:15px}
+.notes .body{padding-top:10px;color:#2b3040;max-width:74ch}
+.notes .body p{margin:0 0 9px}
+.notes code{background:var(--board);border-radius:4px;padding:1px 5px;font-size:13px}
+
+[hidden]{display:none!important}
+
+@media (max-width:820px){
+  .shell{grid-template-columns:1fr;gap:0}
+  .nav{position:static;padding-block:18px 0;gap:16px}
+  .navlist{flex-direction:row;overflow-x:auto;gap:4px;padding-bottom:4px}
+  .navlist a{padding:7px 12px;border:1px solid var(--line);border-radius:999px;white-space:nowrap}
+  .navlist a .tick,.navlist .count{display:none}
+  .navrule,.navfoot{display:none}
+  .row{grid-template-columns:minmax(0,1fr) auto}
+  .row .strip{display:none}
+  .discover{grid-template-columns:1fr}
+  .sess-top{grid-template-columns:56px minmax(0,1fr) auto;row-gap:8px}
+  .sess-top .state{grid-column:2}
+  .sess-detail{margin-left:0}
+  .yours{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:no-preference){
+  .strip .work{animation:rise .5s cubic-bezier(.2,.7,.3,1) backwards}
+}
+@keyframes rise{from{transform:scaleY(.2);transform-origin:bottom}to{transform:scaleY(1)}}
+</style>
+
+<div class="mock">
+  <div class="mock-in">
+    <span class="mock-tag">Design mockup · not the live app</span>
+    <div class="swatchpick" role="group" aria-label="Data color">
+      <span>Bars:</span>
+      <button data-strip="steel" aria-pressed="true"><i class="dot" style="background:#1565c0"></i>Steel &amp; rust</button>
+      <button data-strip="moss" aria-pressed="false"><i class="dot" style="background:#4a6b1f"></i>Moss &amp; amber</button>
+    </div>
+    <div class="mock-tabs" role="tablist" aria-label="Views">
+      <button role="tab" id="tab-landing" aria-selected="true" aria-controls="view-landing">Landing</button>
+      <button role="tab" id="tab-history" aria-selected="false" aria-controls="view-history">History</button>
+      <button role="tab" id="tab-detail" aria-selected="false" aria-controls="view-detail">Workout detail</button>
+    </div>
+  </div>
+</div>
+
+<div class="shell">
+  <nav class="nav" aria-label="Main">
+    <div class="mark">
+      <svg viewBox="0 0 48 48" role="img" aria-label="Ladder Circuit">
+        <circle cx="24" cy="24" r="18" fill="none" stroke="#e3e5ea" stroke-width="5"></circle>
+        <circle cx="24" cy="24" r="18" fill="none" stroke="#6f9b16" stroke-width="5"
+                stroke-linecap="round" stroke-dasharray="85 200" transform="rotate(-90 24 24)"></circle>
+        <circle cx="24" cy="24" r="4.5" fill="#e08a1e"></circle>
+      </svg>
+      <b>Ladder</b><span>Circuit</span>
+    </div>
+
+    <div class="navlist" id="navlist">
+      <a href="#" data-nav="landing" aria-current="page"><i class="tick"></i>Today</a>
+      <a href="#" data-nav="landing"><i class="tick"></i>My workouts<span class="count">7</span></a>
+      <a href="#" data-nav="detail"><i class="tick"></i>Catalog<span class="count">5</span></a>
+      <a href="#" data-nav="history"><i class="tick"></i>History<span class="count">31</span></a>
+      <a href="#" data-nav="landing"><i class="tick"></i>Discover</a>
+      <div class="navrule"></div>
+      <a href="#" data-nav="landing"><i class="tick"></i>Sounds &amp; timing</a>
+      <a href="#" data-nav="landing"><i class="tick"></i>Account</a>
+    </div>
+
+    <div class="navfoot">
+      <div class="who"><span class="av">S</span>Scott<span class="st" title="Synced"></span></div>
+      <p class="navnote">Synced a moment ago. Sessions are recorded to your account, not this device.</p>
+    </div>
+  </nav>
+
+  <!-- ============================ LANDING ============================ -->
+  <main class="page" id="view-landing" role="tabpanel" aria-labelledby="tab-landing">
+    <h1 class="greet">Ready when you are, Scott.</h1>
+    <p class="greet-sub">You and Dana have run <b>3</b> sessions in the last 7 days — <b>74</b> minutes, last one Thursday. <a href="#" data-goto="history">See history</a></p>
+
+    <section aria-labelledby="h-resume">
+      <div class="sechead"><h2 id="h-resume">Pick up where you left off</h2></div>
+      <div class="resume">
+        <div class="resume-top">
+          <div class="resume-id">
+            <div class="resume-when">Last run Thursday · finished all 6 blocks · 2 people</div>
+            <h3>Full-Body KB Ladder</h3>
+            <p>Six stations, one kettlebell, intervals that shrink as you tire. Same setup as last time — Dana starts at station 4.</p>
+          </div>
+          <div class="resume-act">
+            <button class="btn">Start workout</button>
+            <button class="btn ghost">Change setup</button>
+          </div>
+        </div>
+        <div class="resume-strip">
+          <div class="strip lg" data-ladder="descending" aria-label="Interval ladder: 60/30, 50/25, 40/20, 30/15, 20/10"></div>
+          <div class="strip-key"><span><i></i>work</span><span><i class="r"></i>rest</span><span>one block, then everyone rotates a station</span></div>
+        </div>
+        <div class="resume-foot">
+          <span><b>6</b> stations</span><span><b>5</b> intervals per block</span><span><b>6</b> blocks</span>
+          <span>Kettlebell 25 lb · vest · rope</span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-mine">
+      <div class="sechead"><h2 id="h-mine">My workouts</h2><a class="more" href="#">Manage</a></div>
+      <div class="chips" role="group" aria-label="Filter my workouts">
+        <button aria-pressed="true" data-filter="all">All 7</button>
+        <button aria-pressed="false" data-filter="pinned">Pinned 2</button>
+        <button aria-pressed="false" data-filter="saved">Saved setups 3</button>
+        <button aria-pressed="false" data-filter="uploaded">Uploaded 1</button>
+        <button aria-pressed="false" data-filter="edited">Edited by me 1</button>
+      </div>
+      <div class="rows" id="mine"></div>
+    </section>
+
+    <section aria-labelledby="h-catalog">
+      <div class="sechead"><h2 id="h-catalog">Try something else</h2><a class="more" href="#">All 5 workouts</a></div>
+      <div class="teasers" id="teasers"></div>
+    </section>
+
+    <section aria-labelledby="h-discover">
+      <div class="sechead"><h2 id="h-discover">Swap in something new</h2></div>
+      <div class="discover">
+        <div>
+          <h3>Kettlebell Windmill</h3>
+          <p>Hinge at the hip with the bell locked out overhead — shoulder stability plus a hamstring stretch, and it slots neatly into a 30-second station. Start light: this one punishes ego.</p>
+          <p class="src">Pulled daily from the open wger exercise database. Nothing is added to a workout until you add it.</p>
+        </div>
+        <button class="btn ghost">Add to a workout</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================ HISTORY ============================ -->
+  <main class="page" id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden>
+    <h1 class="greet">History</h1>
+    <p class="greet-sub"><b>31</b> sessions since 12 June · <b>14h 20m</b> of work · longest run of weeks with at least one session: <b>5</b></p>
+
+    <section aria-labelledby="h-chart">
+      <div class="sechead"><h2 id="h-chart">How much you trained</h2>
+        <div class="chips" style="margin:0">
+          <button aria-pressed="false" data-range="6">6 weeks</button>
+          <button aria-pressed="true" data-range="12">12 weeks</button>
+          <button aria-pressed="false" data-range="26">26 weeks</button>
+        </div>
+      </div>
+
+      <div class="chartwrap">
+        <div class="chart-head">
+          <h3>Minutes per week</h3>
+          <span class="hint">Hover a bar for the sessions in that week</span>
+        </div>
+        <div class="chart" id="chart">
+          <div class="yaxis" id="yaxis"></div>
+          <div class="plot" id="plot">
+            <div class="grid" id="grid"></div>
+            <div class="bars" id="bars"></div>
+          </div>
+          <div class="xaxis" id="xaxis"></div>
+        </div>
+        <details class="tablelink">
+          <summary>Show the numbers</summary>
+          <table id="chart-table"><thead><tr><th>Week of</th><th>Sessions</th><th>Minutes</th></tr></thead><tbody></tbody></table>
+        </details>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-sessions">
+      <div class="sechead"><h2 id="h-sessions">Every session</h2><a class="more" href="#">Export as CSV</a></div>
+      <div class="chips" role="group" aria-label="Filter sessions">
+        <button aria-pressed="true" data-sess="all">All</button>
+        <button aria-pressed="false" data-sess="finished">Finished</button>
+        <button aria-pressed="false" data-sess="stopped">Stopped early</button>
+        <button aria-pressed="false" data-sess="logged">With set logs</button>
+      </div>
+      <div id="sessions"></div>
+    </section>
+
+    <section aria-labelledby="h-most">
+      <div class="sechead"><h2 id="h-most">What you run most</h2></div>
+      <div class="rows" id="most"></div>
+    </section>
+  </main>
+
+  <!-- ========================= WORKOUT DETAIL ========================= -->
+  <main class="page" id="view-detail" role="tabpanel" aria-labelledby="tab-detail" hidden>
+    <button class="back">&lsaquo; Catalog</button>
+
+    <div class="detail-head">
+      <h1>Full-Body KB Ladder</h1>
+      <p class="lede">Six stations, one kettlebell, intervals that shrink as you tire.</p>
+    </div>
+
+    <div class="facts">
+      <div class="fact"><div class="k">Length</div><div class="v">30 min</div></div>
+      <div class="fact"><div class="k">People</div><div class="v">1–6</div></div>
+      <div class="fact"><div class="k">Stations</div><div class="v">6</div></div>
+      <div class="fact"><div class="k">Ladder</div><div class="v">60→20s</div></div>
+      <div class="fact"><div class="k">Gear</div><div class="v">KB · vest · rope</div></div>
+    </div>
+
+    <div style="margin-top:22px">
+      <div class="strip lg" data-ladder="descending" aria-label="Interval ladder: 60/30, 50/25, 40/20, 30/15, 20/10"></div>
+      <div class="strip-key"><span><i></i>work</span><span><i class="r"></i>rest</span><span>bar height is seconds on — the ladder descends 60 → 20</span></div>
+    </div>
+
+    <div class="yours">
+      <div>
+        <h3>Your history with this one</h3>
+        <p>Run <b>9</b> times since June, <b>8</b> of them finished. Last run Thursday; your usual is <b>2</b> people at <b>30</b> minutes.</p>
+      </div>
+      <div class="spark" id="spark" aria-label="Last nine runs, by minutes"></div>
+    </div>
+
+    <div class="prose">
+      <h2>What it is</h2>
+      <p>A strength-endurance circuit built around one kettlebell and whatever else is in the garage. Each block runs five intervals — 60 seconds on, then 50, 40, 30, 20 — with the rest shrinking alongside the work. Everyone rotates one station at the end of a block, so with two people you are always at opposite ends of the circuit and never waiting for the bell.</p>
+      <p>The descending ladder is the point: the work gets shorter exactly as your grip and lungs give out, so the last interval of a block is the one you can still finish honestly.</p>
+
+      <h2>How it runs</h2>
+      <p>Five seconds of lead-in, then the first work interval. The timer calls the work, the rest, and the rotation; at 5 seconds it counts you down, and it chimes once at the halfway point of anything over 12 seconds. Screen stays awake the whole time, and the session is recorded when you finish — or when you stop early, marked as stopped.</p>
+
+      <h2>Stations</h2>
+      <div class="stations" id="stations"></div>
+
+      <h2>Good for</h2>
+      <p>Two people sharing one bell, 30 minutes, and a floor you don't mind sweating on. Skip it if you are short on grip strength today — the swings and the clean &amp; press stack up fast. Run it solo by dropping to one person; the app announces each station by name so you don't have to look up.</p>
+    </div>
+
+    <div class="detail-cta">
+      <button class="btn">Start workout</button>
+      <button class="btn ghost">Customize</button>
+      <button class="btn ghost">Pin to my workouts</button>
+      <button class="btn ghost">Copy shareable link</button>
+    </div>
+
+    <div class="night">
+      <div class="big">60</div>
+      <p>Starting a workout hands the screen to the timer — dark, one number, readable across the garage. The lobby is light; the gym floor is not.</p>
+    </div>
+  </main>
+</div>
+
+<div class="notes">
+  <details open>
+    <summary>What the app records, and what surfaces it</summary>
+    <div class="body">
+      <p>Nothing in the app records a completed workout today — this is the piece that makes History, "Pick up where you left off", and "Your history with this one" real. Two collections, both scoped by <code>userId</code> like everything else:</p>
+      <p><b>A session</b> is written when a run ends, finished or not: when it started and ended, where it came from (catalog workout id, saved setup, uploaded workout), a snapshot of the stations and ladder as they were run, planned seconds vs. seconds actually completed, whether it reached the end, and who was in it. The snapshot matters — editing a workout later must not rewrite what you did last month.</p>
+      <p><b>A set log</b> is optional and attaches to a session: exercise, sets, reps, weight, and whether it was typed or dictated. This is what the voice logging in the plan feeds.</p>
+      <p>Three reads cover every screen here: the most recent session (landing hero), weekly totals for the chart (one aggregate request, not 31 documents), and a paged session list. A per-workout rollup answers "your history with this one".</p>
+      <p><b>Failure and emptiness.</b> If the session write fails, the timer must not care — it queues locally and retries on the next sync, the same way config saves already degrade. With no history at all, the chart is replaced by one line: <em>"No sessions yet. Finish a workout and it shows up here."</em></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Why the bars changed color</summary>
+    <div class="body">
+      <p>The first pass used the brand lime for work and amber for rest. Measured against a colorblindness model, that pair separates by <b>ΔE 0.7</b> under protanopia — for a red-green colorblind viewer the two marks are the same color, so the strip stops carrying information. Bar height rescues it, but color shouldn't need rescuing.</p>
+      <p><b>Steel <code>#1565c0</code> and rust <code>#c2410c</code></b> measure ΔE 25.2 protan and 31.9 in normal vision, both above 3:1 contrast on white. Rust reads as oxidized iron and steel as the bell itself, which suits the subject better than a lime that was only ever the timer's "go" color. Brand lime keeps the app mark and the dark timer, where nothing has to be told apart from it.</p>
+      <p>The alternative in the switcher, <b>moss + amber</b>, also passes every check but sits at ΔE 7.9 protan — legal only because bar height and the gap between marks already encode the same thing twice. Steel &amp; rust is the safer default.</p>
+      <p>Chart bars reuse the work color in a lighter step, with the current week at full strength. One hue, light to dark: magnitude, not identity.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>What each landing section is for, and what data it needs</summary>
+    <div class="body">
+      <p><b>Pick up where you left off</b> is the hero because it is the fastest path to the only thing that matters — the timer running. It reads the most recent session; before any session exists it falls back to the saved active config, which the app already has.</p>
+      <p><b>My workouts</b> unifies four things behind one list and a filter rather than four half-empty sections: <em>Saved setups</em> are the named ladder presets the settings sheet already writes, <em>Uploaded</em> are <code>regimen@1</code> JSON workouts, <em>Edited by me</em> are catalog workouts you changed and kept, <em>Pinned</em> is a new flag per workout id. Only pinning and "edited by me" need new storage.</p>
+      <p><b>Swap in something new</b> is the free-API slot. The open <a href="https://wger.de/en/software/api">wger</a> exercise database needs no key — but the app's CSP is <code>connect-src 'self'</code>, so the browser must not call it directly. Our own server fetches and caches one exercise a day at <code>/api/discover</code>; the CSP stays untouched and no third party sees your users.</p>
+      <p><b>Empty states.</b> With nothing saved, My workouts reads: <em>"Nothing saved yet. Customize any workout and save the setup — it shows up here on every device you sign in on."</em></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Why the rest of it looks like this</summary>
+    <div class="body">
+      <p><b>The interval strip is the one loud thing.</b> Every workout in this app is a rhythm, so each is drawn as its own rhythm: bar height is seconds of work, the rust rule underneath is the rest. A Tabata reads as a flat picket fence, the KB ladder as a staircase walking down, the pyramid as a hill. Real data, three sizes — in a row, on the hero, on the detail page.</p>
+      <p><b>Light lobby, dark gym floor.</b> The landing page extends the welcome screen's light surface — white, <code>#101322</code> ink. Anton and the panel chrome stay where they belong: on the timer. The dark strip at the bottom of the detail page shows the handoff.</p>
+      <p><b>No dashboard chrome.</b> No stat tiles: the summary is a sentence, because three numbers in boxes would say the same thing louder. The only bordered boxes are the ones you act on. The nav carries counts because "History 31" is worth knowing before you click.</p>
+      <p><b>Copy is coach's-whiteboard, not marketing.</b> Second person, concrete numbers, no exclamation marks. "Ready when you are" over "Welcome back!"; "Start workout" on the button and on the thing it starts. A session that ended early says <em>stopped early</em>, not <em>incomplete</em> — it is a fact, not a judgement.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>What the workout page needs in catalog.js</summary>
+    <div class="body">
+      <p>The catalog has names and a category string today. The detail page needs four new fields per workout, all plain strings — no schema change, no share-link impact:</p>
+      <p><code>blurb</code> — one line, under 70 characters, used on cards and as the lede.<br>
+      <code>about</code> — two short paragraphs: what it trains and why it is shaped this way.<br>
+      <code>runs</code> — how a block actually goes, including rotation.<br>
+      <code>goodFor</code> — who it suits, and when to skip it.</p>
+      <p>Length, station count, ladder shape and gear are derived from data already there, so they never go stale. Gear is the distinct <code>gear</code> values across the stations.</p>
+    </div>
+  </details>
+</div>
+
+<script>
+const LADDERS = {
+  descending: [[60,30],[50,25],[40,20],[30,15],[20,10]],
+  tabata:     Array.from({length:8},()=>[20,10]),
+  pyramid:    [[20,10],[40,20],[60,30],[40,20],[20,10]],
+  flat:       Array.from({length:5},()=>[40,20]),
+};
+
+// Draw one interval strip. Width is proportional to seconds so rest reads as a real pause;
+// work-bar HEIGHT is the seconds on, which is what makes a descending ladder look like stairs.
+function drawStrip(el){
+  const lad = LADDERS[el.dataset.ladder] || LADDERS.descending;
+  const total = lad.reduce((a,p)=>a+p[0]+p[1],0);
+  const maxOn = Math.max(...lad.map(p=>p[0]));
+  el.innerHTML = "";
+  lad.forEach((p,i)=>{
+    const w = document.createElement("div");
+    w.className = "work";
+    w.style.flex = p[0] / total;
+    w.style.height = Math.round(30 + 70 * (p[0]/maxOn)) + "%";
+    w.style.animationDelay = (i*45) + "ms";
+    el.appendChild(w);
+    if(p[1] > 0){
+      const r = document.createElement("div");
+      r.className = "rest";
+      r.style.flex = p[1] / total;
+      el.appendChild(r);
+    }
+  });
+}
+
+/* ---------------- landing: my workouts ---------------- */
+const MINE = [
+  { name:"Thursday KB (Dana + me)", origin:"saved", pinned:true,  ladder:"descending", meta:"30 min · 6 stations · 2 people · run 9 times" },
+  { name:"Garage Tabata",           origin:"uploaded", pinned:true, ladder:"tabata",   meta:"16 min · 4 stations · solo · run 3 times" },
+  { name:"Quick 15 — no rope",      origin:"edited", pinned:false, ladder:"flat",      meta:"15 min · 3 stations · 2 people · edited from Quick 15" },
+  { name:"Short warm-up",           origin:"saved", pinned:false,  ladder:"pyramid",   meta:"9 min · 5 stations · 1 person · never run" },
+  { name:"Sunday long one",         origin:"saved", pinned:false,  ladder:"descending",meta:"45 min · 6 stations · 2 people · run twice" },
+];
+const ORIGIN_LABEL = { saved:"Saved", uploaded:"Uploaded", edited:"Edited" };
+
+function renderMine(filter){
+  const host = document.getElementById("mine");
+  const list = MINE.filter(w => filter === "all" ? true : filter === "pinned" ? w.pinned : w.origin === filter);
+  if(!list.length){
+    host.innerHTML = '<div class="empty"><b>Nothing here yet.</b>' +
+      'Customize any workout and save the setup — it shows up here on every device you sign in on.</div>';
+    return;
+  }
+  host.innerHTML = list.map(w => `
+    <div class="row">
+      <div>
+        <div class="nm">
+          <button class="pin" aria-pressed="${w.pinned}" aria-label="Pin ${w.name}">${w.pinned ? "&#9679;" : "&#9675;"}</button>
+          <span>${w.name}</span>
+          <span class="origin">${ORIGIN_LABEL[w.origin]}</span>
+        </div>
+        <div class="meta">${w.meta}</div>
+      </div>
+      <div class="strip sm" data-ladder="${w.ladder}" aria-hidden="true"></div>
+      <button class="go">Start</button>
+    </div>`).join("");
+  host.querySelectorAll(".strip").forEach(drawStrip);
+}
+
+const TEASERS = [
+  { name:"Tabata Burner", blurb:"Twenty on, ten off, eight times. As short and as unpleasant as it sounds.", meta:"16 min · solo · no gear", ladder:"tabata" },
+  { name:"Bodyweight Pyramid", blurb:"Climbs from 20 seconds to 60 and walks back down. Nothing to carry.", meta:"24 min · 1–6 people", ladder:"pyramid" },
+  { name:"Quick 15", blurb:"Flat 40/20 on a 15-minute cap, for the days you nearly skipped it.", meta:"15 min · 2 people", ladder:"flat" },
+];
+document.getElementById("teasers").innerHTML = TEASERS.map(t => `
+  <button class="teaser">
+    <div class="strip sm" data-ladder="${t.ladder}" aria-hidden="true"></div>
+    <h3>${t.name}</h3>
+    <p class="blurb">${t.blurb}</p>
+    <div class="tmeta">${t.meta}</div>
+  </button>`).join("");
+
+/* ---------------- history: weekly minutes ---------------- */
+// One bucket per week, exactly what GET /api/stats?weeks=n would return.
+const WEEKS = [
+  { week:"Jun 16", sessions:2, minutes:52 }, { week:"Jun 23", sessions:3, minutes:78 },
+  { week:"Jun 30", sessions:1, minutes:30 }, { week:"Jul 7",  sessions:0, minutes:0  },
+  { week:"Jul 14", sessions:2, minutes:60 }, { week:"Jul 21", sessions:3, minutes:95 },
+  { week:"Jul 28", sessions:4, minutes:120 },{ week:"Aug 4",  sessions:2, minutes:45 },
+  { week:"Aug 11", sessions:0, minutes:0  }, { week:"Aug 18", sessions:3, minutes:88 },
+  { week:"Aug 25", sessions:3, minutes:74 }, { week:"Sep 1",  sessions:3, minutes:74 },
+];
+
+function renderChart(weeks){
+  const data = WEEKS.slice(-weeks);
+  const peak = Math.max(...data.map(d => d.minutes));
+  const top = Math.ceil(peak / 30) * 30 || 30;
+  const ticks = [top, top * 2/3, top / 3, 0];
+
+  document.getElementById("yaxis").innerHTML = ticks.map(t => `<span>${Math.round(t)}</span>`).join("");
+  document.getElementById("grid").innerHTML = ticks.map(() => "<i></i>").join("");
+
+  const maxI = data.reduce((m, d, i) => d.minutes > data[m].minutes ? i : m, 0);
+  document.getElementById("bars").innerHTML = data.map((d, i) => {
+    const isNow = i === data.length - 1;
+    // Direct-label only the peak and the current week; a number on every bar is noise.
+    const lab = (i === maxI || isNow) ? `<span class="lab">${d.minutes}</span>` : "";
+    return `<button class="bar${isNow ? " now" : ""}${d.minutes ? "" : " zero"}" data-i="${i}"
+      aria-label="Week of ${d.week}: ${d.minutes} minutes over ${d.sessions} sessions">
+      ${lab}<span class="fill" style="height:${d.minutes ? Math.max(2, 100 * d.minutes / top) : 0}%"></span>
+    </button>`;
+  }).join("");
+
+  const every = data.length > 14 ? 4 : 2;
+  document.getElementById("xaxis").innerHTML = data
+    .map((d, i) => `<span>${i % every === 0 || i === data.length - 1 ? d.week : ""}</span>`).join("");
+
+  document.querySelector("#chart-table tbody").innerHTML = data
+    .map(d => `<tr><td>${d.week}</td><td>${d.sessions}</td><td>${d.minutes}</td></tr>`).join("");
+
+  const plot = document.getElementById("plot");
+  plot.querySelectorAll(".bar").forEach(bar => {
+    const d = data[+bar.dataset.i];
+    const show = () => {
+      hide();
+      const tip = document.createElement("div");
+      tip.className = "tip";
+      tip.id = "tip";
+      tip.innerHTML = d.sessions
+        ? `Week of ${d.week}<br><b>${d.minutes}</b> min · <b>${d.sessions}</b> session${d.sessions > 1 ? "s" : ""}`
+        : `Week of ${d.week}<br>No sessions`;
+      plot.appendChild(tip);
+      const r = bar.getBoundingClientRect(), p = plot.getBoundingClientRect();
+      tip.style.left = (r.left - p.left + r.width / 2) + "px";
+      tip.style.top = Math.max(18, r.top - p.top + r.height * (1 - (d.minutes / top)) - 8) + "px";
+    };
+    const hide = () => { const t = document.getElementById("tip"); if(t) t.remove(); };
+    bar.addEventListener("mouseenter", show);
+    bar.addEventListener("focus", show);
+    bar.addEventListener("mouseleave", hide);
+    bar.addEventListener("blur", hide);
+  });
+}
+
+/* ---------------- history: session log ---------------- */
+const SESSIONS = [
+  { day:"This week", time:"Thu 6:12pm", name:"Full-Body KB Ladder", ladder:"descending", mins:30, people:"Scott + Dana",
+    state:"done", logs:[["KB Swings","3 × 15 @ 25 lb"],["Clean & Press","3 × 10 @ 25 lb"],["Goblet Squats","3 × 15 @ 15 lb"]],
+    stations:[["KB Swings","6 rounds"],["Jump Rope","6 rounds"],["Vest Squats","6 rounds"]] },
+  { day:"This week", time:"Tue 6:40pm", name:"Garage Tabata", ladder:"tabata", mins:16, people:"Scott",
+    state:"done", logs:[], stations:[["Burpees","2 rounds"],["Jump Squats","2 rounds"]] },
+  { day:"This week", time:"Mon 7:05am", name:"Short warm-up", ladder:"pyramid", mins:9, people:"Scott",
+    state:"part", stopped:"stopped after 6 of 9 minutes", logs:[], stations:[["Push-ups","1 round"],["Air Squats","1 round"]] },
+  { day:"Last week", time:"Sat 9:30am", name:"Sunday long one", ladder:"descending", mins:45, people:"Scott + Dana",
+    state:"done", logs:[["KB Row","4 × 10/arm @ 25 lb"]], stations:[["KB Swings","9 rounds"],["Push-ups","9 rounds"]] },
+  { day:"Last week", time:"Wed 6:20pm", name:"Quick 15 — no rope", ladder:"flat", mins:15, people:"Scott + Dana",
+    state:"done", logs:[], stations:[["KB Swings","5 rounds"],["Push-ups","5 rounds"]] },
+];
+
+function renderSessions(filter){
+  const list = SESSIONS.filter(s =>
+    filter === "all" ? true :
+    filter === "finished" ? s.state === "done" :
+    filter === "stopped" ? s.state === "part" : s.logs.length > 0);
+  const host = document.getElementById("sessions");
+  if(!list.length){
+    host.innerHTML = '<div class="empty"><b>No sessions match that filter.</b>Clear the filter to see all 31.</div>';
+    return;
+  }
+  let html = "", day = null;
+  list.forEach((s, i) => {
+    if(s.day !== day){ if(day) html += "</div>"; day = s.day; html += `<div class="daygroup"><div class="dayhead">${day}</div>`; }
+    html += `
+      <div class="sess">
+        <div class="sess-top">
+          <div class="time">${s.time}</div>
+          <div>
+            <div class="nm">${s.name}</div>
+            <div class="meta"><b>${s.mins}</b> min<span>·</span>${s.people}
+              <span class="state ${s.state}">${s.state === "done" ? "Finished" : "Stopped early"}</span>
+              ${s.logs.length ? `<span>· ${s.logs.length} set log${s.logs.length > 1 ? "s" : ""}</span>` : ""}
+            </div>
+          </div>
+          <div class="strip sm" data-ladder="${s.ladder}" aria-hidden="true"></div>
+          <button class="expand" data-sess="${i}" aria-expanded="false">Details</button>
+        </div>
+        <div class="sess-detail" id="sd-${i}" hidden>
+          <div>
+            <h4>How it ran</h4>
+            <ul>${s.stations.map(r => `<li>${r[0]}<span>${r[1]}</span></li>`).join("")}
+            ${s.stopped ? `<li>${s.stopped}<span></span></li>` : ""}</ul>
+          </div>
+          <div>
+            <h4>${s.logs.length ? "Sets you logged" : "No sets logged"}</h4>
+            <ul>${s.logs.length
+              ? s.logs.map(r => `<li>${r[0]}<span>${r[1]}</span></li>`).join("")
+              : '<li style="color:#6b7280">Say "three by fifteen at twenty-five" during a rest to log a set.<span></span></li>'}</ul>
+          </div>
+        </div>
+      </div>`;
+  });
+  host.innerHTML = html + "</div>";
+  host.querySelectorAll(".strip").forEach(drawStrip);
+  host.querySelectorAll(".expand").forEach(b => b.addEventListener("click", () => {
+    const box = document.getElementById("sd-" + b.dataset.sess);
+    const open = !box.hidden;
+    box.hidden = open;
+    b.setAttribute("aria-expanded", String(!open));
+    b.textContent = open ? "Details" : "Hide";
+  }));
+}
+
+const MOST = [
+  { name:"Full-Body KB Ladder", ladder:"descending", meta:"9 runs · 4h 10m · last Thursday" },
+  { name:"Quick 15 — no rope",  ladder:"flat",       meta:"7 runs · 1h 45m · last Wednesday" },
+  { name:"Garage Tabata",       ladder:"tabata",     meta:"6 runs · 1h 36m · last Tuesday" },
+];
+document.getElementById("most").innerHTML = MOST.map(m => `
+  <div class="row">
+    <div><div class="nm"><span>${m.name}</span></div><div class="meta">${m.meta}</div></div>
+    <div class="strip sm" data-ladder="${m.ladder}" aria-hidden="true"></div>
+    <button class="go">Start</button>
+  </div>`).join("");
+
+/* ---------------- detail: stations + sparkline ---------------- */
+const STATIONS = [
+  ["KB Swings","25 lb","15 reps"],
+  ["Jump Rope","Rope","To time"],
+  ["Vest Squats","Vest","12 reps"],
+  ["Clean &amp; Press","25 lb","10 · 5 per arm"],
+  ["Goblet Squats","15 lb","15 reps"],
+  ["Push-ups","Bodyweight","12–15 reps"],
+];
+document.getElementById("stations").innerHTML = STATIONS.map((s,i) => `
+  <div class="station">
+    <div class="n">${i+1}</div>
+    <div><div class="ex">${s[0]}</div><div class="sub">${s[1]} · ${s[2]}</div></div>
+    <a href="#">How to</a>
+  </div>`).join("");
+
+const RUNS = [30,30,22,30,30,18,30,30,30];
+document.getElementById("spark").innerHTML = RUNS.map((m,i) =>
+  `<i class="${i === RUNS.length-1 ? "last" : ""}" style="height:${Math.round(100*m/30)}%" title="${m} min"></i>`).join("");
+
+/* ---------------- wiring ---------------- */
+document.querySelectorAll('.chips button[data-filter]').forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll('.chips button[data-filter]').forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    renderMine(b.dataset.filter);
+  });
+});
+document.querySelectorAll('.chips button[data-sess]').forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll('.chips button[data-sess]').forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    renderSessions(b.dataset.sess);
+  });
+});
+document.querySelectorAll('.chips button[data-range]').forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll('.chips button[data-range]').forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    renderChart(Math.min(+b.dataset.range, WEEKS.length));
+  });
+});
+document.querySelectorAll(".swatchpick button").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".swatchpick button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    document.body.dataset.strip = b.dataset.strip;
+  });
+});
+
+document.addEventListener("click", ev => {
+  const pin = ev.target.closest(".pin");
+  if(pin){
+    const on = pin.getAttribute("aria-pressed") === "true";
+    pin.setAttribute("aria-pressed", String(!on));
+    pin.innerHTML = on ? "&#9675;" : "&#9679;";
+    return;
+  }
+  if(ev.target.closest("a[href='#'], .btn, .go, .teaser, .back")) ev.preventDefault();
+});
+
+const TABS = { "tab-landing":"view-landing", "tab-history":"view-history", "tab-detail":"view-detail" };
+function showView(key){
+  Object.entries(TABS).forEach(([t, v]) => {
+    const sel = t === "tab-" + key;
+    document.getElementById(t).setAttribute("aria-selected", String(sel));
+    document.getElementById(v).hidden = !sel;
+  });
+  document.querySelectorAll("#navlist a").forEach(a =>
+    a.dataset.nav === key ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+  window.scrollTo({ top: 0, behavior: "instant" });
+}
+Object.keys(TABS).forEach(id => document.getElementById(id)
+  .addEventListener("click", () => showView(id.replace("tab-", ""))));
+document.querySelectorAll("[data-goto]").forEach(el =>
+  el.addEventListener("click", () => showView(el.dataset.goto)));
+
+renderMine("all");
+renderSessions("all");
+renderChart(12);
+document.querySelectorAll(".strip").forEach(drawStrip);
+</script>

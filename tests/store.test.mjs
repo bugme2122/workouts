@@ -129,3 +129,41 @@ test("mergePresetMaps tolerates missing sides", () => {
   assert.deepEqual(mergePresetMaps({ A: 1 }, null), { A: 1 });
   assert.deepEqual(mergePresetMaps(null, { B: 2 }), { B: 2 });
 });
+
+// ---------- landing page: pinned rows ----------
+import { PINS_NS, mergePins } from "../store.js";
+
+test("local pins round-trip and reject junk", () => {
+  stubLocalStorage();
+  assert.deepEqual(local.loadPins(), []);
+  local.savePins(["preset:A", "regimen:B", 42, null]);
+  assert.deepEqual(local.loadPins(), ["preset:A", "regimen:B"]);
+});
+
+test("splitPresets pulls pins out of the cloud document", () => {
+  const doc = { "Leg day": { people: 2 }, [REGIMEN_NS]: { HIIT: {} }, [PINS_NS]: ["preset:Leg day", 7] };
+  const { ladder, regimens, pins } = splitPresets(doc);
+  assert.deepEqual(Object.keys(ladder), ["Leg day"]);
+  assert.deepEqual(Object.keys(regimens), ["HIIT"]);
+  assert.deepEqual(pins, ["preset:Leg day"]);
+});
+
+test("splitPresets returns no pins when the document has none", () => {
+  assert.deepEqual(splitPresets({ A: {} }).pins, []);
+  assert.deepEqual(splitPresets(null).pins, []);
+});
+
+test("mergePresets round-trips pins and omits the key when empty", () => {
+  const doc = mergePresets({ A: { x: 1 } }, { R: {} }, ["preset:A"]);
+  assert.deepEqual(doc[PINS_NS], ["preset:A"]);
+  assert.deepEqual(splitPresets(doc).pins, ["preset:A"]);
+  assert.equal(PINS_NS in mergePresets({ A: {} }, {}, []), false);
+  assert.equal(PINS_NS in mergePresets({ A: {} }, {}), false);
+});
+
+test("mergePins unions both sides without duplicates", () => {
+  assert.deepEqual(mergePins(["a", "b"], ["b", "c"]), ["a", "b", "c"]);
+  assert.deepEqual(mergePins(null, ["c"]), ["c"]);
+  assert.deepEqual(mergePins(["a"], null), ["a"]);
+  assert.deepEqual(mergePins(null, null), []);
+});
