@@ -27,8 +27,11 @@ export async function getState(req, res) {
   const doc = await WorkoutState.findOne({ userId: req.user.id });
   const config = doc?.configJson ? JSON.parse(doc.configJson) : null;
   // updatedAt lets the client decide newest-wins on sign-in instead of always clobbering local
-  // edits with the cloud copy (GAPS #1).
-  res.json({ config, updatedAt: doc?.updatedAt ?? null });
+  // edits with the cloud copy (GAPS #1). This must be configUpdatedAt, NOT the document's own
+  // updatedAt — that field also bumps on a presets-only write (putPresets shares this document),
+  // so comparing against it made an untouched config look "newer" than it really was whenever
+  // presets were saved on either device (code review, server #1).
+  res.json({ config, updatedAt: doc?.configUpdatedAt ?? null });
 }
 
 export async function putState(req, res) {
@@ -37,7 +40,7 @@ export async function putState(req, res) {
   if (!enc.ok) return;
   await WorkoutState.findOneAndUpdate(
     { userId: req.user.id },
-    { $set: { configJson: enc.json } },
+    { $set: { configJson: enc.json, configUpdatedAt: new Date() } },
     { upsert: true, new: true }
   );
   res.json({ ok: true });

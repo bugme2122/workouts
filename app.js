@@ -795,9 +795,10 @@ function renderCatalog() {
       card.querySelector(".unlock").onclick = () => showScreen("welcome");
     } else {
       card.querySelector(".cust").onclick = () => openCustomize(w);
+      // The "Details" button below already opens the same page; a second, unlabeled click
+      // target on a plain <div> is neither focusable nor keyboard-operable, so it's dropped
+      // rather than duplicated.
       card.querySelector(".det").onclick = () => openWorkout(w);
-      card.querySelector(".wname").onclick = () => openWorkout(w);
-      card.querySelector(".wname").style.cursor = "pointer";
       card.querySelector(".go").onclick = () => { config = sanitize(workoutToConfig(w)); persist(); startLive(); };
     }
     stack.appendChild(card);
@@ -925,7 +926,15 @@ function recordRun(completed){
         attachPendingLogs(res && res.id);
         refreshLandingIfVisible();
       })
-      .catch(e => { noteSync(false, "session save", e); store.local.queueSession(session); });
+      .catch(e => {
+        noteSync(false, "session save", e);
+        store.local.queueSession(session);
+        // The session write failed, so there's nothing to attach these to. Clear rather than
+        // leave them for the NEXT run to pick up and misfile onto a session they don't belong
+        // to — the logs themselves are already saved, just unattached, which is the accepted
+        // fallback documented in logSetFromText().
+        pendingLogIds = [];
+      });
   } else {
     // Guests and offline runs: keep it until there is somewhere to send it.
     store.local.queueSession(session);
@@ -1155,6 +1164,7 @@ $("setLogOpen").onclick = () => {
   const body = $("setLogBody");
   body.hidden = !body.hidden;
   $("setLogOpen").textContent = body.hidden ? "+ Log a set" : "Hide set log";
+  $("setLogOpen").setAttribute("aria-expanded", String(!body.hidden));
   if(!body.hidden){ setLogMsg(""); $("setLogInput").focus(); }
 };
 $("setLogSave").onclick = () => { setLogWasSpoken = false; logSetFromText($("setLogInput").value); };
@@ -1242,6 +1252,10 @@ function weekLabel(iso){
 
 function renderHistoryChart(){
   const host = $("histBars"), yAxis = $("histY"), grid = $("histGrid"), xAxis = $("histX");
+  // A re-render (range chip, session delete) rebuilds #histBars but not #histPlot itself, so a
+  // tooltip left open by a previous hover would otherwise be stranded, pointing at a bar that no
+  // longer exists underneath it.
+  const stuck = $("charttip"); if(stuck) stuck.remove();
   const data = (histStats && histStats.weekly) || [];
   if(!data.length){
     host.innerHTML = ""; yAxis.innerHTML = ""; grid.innerHTML = ""; xAxis.innerHTML = "";
@@ -1645,7 +1659,11 @@ function startFromLibrary(row){
   if(row.kind==="regimen"){
     const r = getRegimenPresets()[row.name];
     if(!r) return;
-    adoptRegimen(sanitizeRegimen(clone(r)));
+    // Rule 1: validate then sanitize, same as a fresh upload — this one just round-tripped
+    // through storage/cloud instead of a file picker, which doesn't make it more trustworthy.
+    const v = validateRegimen(r);
+    if(!v.ok){ console.warn("stored regimen failed validation", row.name, v.error); return; }
+    adoptRegimen(sanitizeRegimen(clone(v.regimen)));
     build(); setupView(); reset();
     renderByowActive();
     showScreen("live"); ensureAudio();
@@ -1687,20 +1705,25 @@ function renderLandingTeasers(){
   });
 }
 
+// The nav is cloned into every screen (see the clone loop below), so its footer exists once per
+// copy — addressed by [data-who]/[data-syncnote], never by id, same as data-nav and data-count.
+// (An earlier version used ids; cloneNode() duplicated them, and $() only ever finds the first
+// copy, leaving every non-landing screen's nav footer permanently blank.)
 function paintLandingSync(){
-  const note = $("lpSyncNote"), who = $("lpWho");
-  if(!note || !who) return;
-  if(authUser){
-    const first = ((authUser.firstName || authUser.email || "Account").trim().split(/\s+/)[0]) || "Account";
-    who.innerHTML = '<span class="av">' + esc((first[0]||"?").toUpperCase()) + "</span>" +
-      "<span>" + esc(first) + '</span><span class="st' + (_syncState==="err" ? " err" : "") + '"></span>';
-    note.textContent = _syncState==="err"
+  const whoHTML = authUser
+    ? (() => {
+        const first = ((authUser.firstName || authUser.email || "Account").trim().split(/\s+/)[0]) || "Account";
+        return '<span class="av">' + esc((first[0]||"?").toUpperCase()) + "</span>" +
+          "<span>" + esc(first) + '</span><span class="st' + (_syncState==="err" ? " err" : "") + '"></span>';
+      })()
+    : '<span class="av">?</span><span>Guest</span>';
+  const noteText = !authUser
+    ? "Guest mode — everything is saved on this device only."
+    : _syncState==="err"
       ? "Last sync failed — your workouts are saved on this device."
       : "Saved to your account. Your workouts follow you to any device you sign in on.";
-  } else {
-    who.innerHTML = '<span class="av">?</span><span>Guest</span>';
-    note.textContent = "Guest mode — everything is saved on this device only.";
-  }
+  document.querySelectorAll('[data-who]').forEach(el => { el.innerHTML = whoHTML; });
+  document.querySelectorAll('[data-syncnote]').forEach(el => { el.textContent = noteText; });
 }
 
 function renderLanding(){
@@ -1759,11 +1782,14 @@ function paintNav(){
 }
 $("lpAllWorkouts").onclick = () => showScreen("home");
 $("homeBack").onclick = () => goLanding();
-// Leaving a live workout pauses it rather than letting cues fire from a screen you can't see.
-// The paused position is still there when you come back.
+// Leaving the live screen ENDS the run — there is no resume entry point anywhere in the app
+// (every path back into "live" calls reset() first), so treating this as a pause would silently
+// discard whatever was done. Stop the cues, bank what was completed, then close the run out the
+// same way reset() does, so a later finish/reset can't find runRecorded already true and drop it.
 $("liveBack").onclick = () => {
   if(running) start();          // pause first, so cues can't fire from a screen you can't see
-  recordRun(false);             // and bank the part you did do
+  recordRun(false);             // bank the part you did do
+  runStartAt = null; runRecorded = false;
   goLanding();
 };
 $("lpStart").onclick = () => { build(); setupView(); reset(); showScreen("live"); ensureAudio(); };

@@ -70,8 +70,11 @@ export async function createSession(req, res) {
     startedAt,
     durationSec,
     completed: !!s.completed,
-    phasesDone: Math.max(0, num(s.phasesDone)),
-    totalPhases: Math.max(0, num(s.totalPhases)),
+    // Ceiling, not just a floor — every other numeric field here is range-checked; without one,
+    // a huge value (e.g. 1e308) rendered a nonsense completion ratio on the client. 100000 phases
+    // is already far beyond anything the timer or a regimen upload could ever produce.
+    phasesDone: Math.max(0, Math.min(100000, num(s.phasesDone))),
+    totalPhases: Math.max(0, Math.min(100000, num(s.totalPhases))),
     people: Math.max(1, Math.min(6, num(s.people, 1))),
     ladder,
     stations,
@@ -85,7 +88,11 @@ export async function listSessions(req, res) {
     q.workoutId = req.query.workoutId.trim().slice(0, 64);
   if (req.query.before) {
     const before = new Date(req.query.before);
-    if (!isNaN(before.getTime())) q.startedAt = { $lt: before };
+    // An unparseable `before` used to be silently ignored, which returned the newest page
+    // instead of an error — a paginating client reads that as "there's more" and loops forever
+    // re-fetching the same first page.
+    if (isNaN(before.getTime())) return res.status(400).json({ error: 'before must be a valid date.' });
+    q.startedAt = { $lt: before };
   }
   const docs = await WorkoutSession.find(q)
     .sort({ startedAt: -1 })
@@ -184,26 +191,36 @@ export async function removeLog(req, res) {
 
 // ---------------------------------------------------------------- stats
 
-const dayKey = (d) => new Date(d).toISOString().slice(0, 10);
+// All of "today"/"this week"/"streak" are calendar concepts, which only mean something relative
+// to a wall clock — the server's UTC clock is not the trainer's. `tzOffsetMin` is the number of
+// minutes to ADD to a UTC instant to get local wall time (i.e. the client passes
+// `-new Date().getTimezoneOffset()`). Shifting every timestamp by it before taking UTC
+// day/week keys turns "midnight UTC" boundaries into "midnight local" ones, without needing a
+// full IANA-timezone/DST library for what is, in the end, a chart bucket and a streak count.
+// Unset or non-numeric defaults to 0 (UTC) so old clients keep the previous behavior exactly.
+function shift(d, tzOffsetMin) {
+  return new Date(new Date(d).getTime() + tzOffsetMin * 60000);
+}
+const dayKey = (d, tz) => shift(d, tz).toISOString().slice(0, 10);
 
 // Monday of the week a date falls in, as a YYYY-MM-DD key. Weeks are the unit the History
 // chart plots, so they are computed once here rather than in the browser.
-function weekKey(d) {
-  const x = new Date(d);
+function weekKey(d, tz) {
+  const x = shift(d, tz);
   const dow = (x.getUTCDay() + 6) % 7; // Monday = 0
   x.setUTCDate(x.getUTCDate() - dow);
   return x.toISOString().slice(0, 10);
 }
 
 // Consecutive days, ending today or yesterday, with at least one session.
-function streakFromDays(daySet, today) {
-  const cur = new Date(today);
-  if (!daySet.has(dayKey(cur))) {
+function streakFromDays(daySet, today, tz) {
+  const cur = shift(today, tz);
+  if (!daySet.has(cur.toISOString().slice(0, 10))) {
     cur.setUTCDate(cur.getUTCDate() - 1);
-    if (!daySet.has(dayKey(cur))) return 0;
+    if (!daySet.has(cur.toISOString().slice(0, 10))) return 0;
   }
   let n = 0;
-  while (daySet.has(dayKey(cur))) {
+  while (daySet.has(cur.toISOString().slice(0, 10))) {
     n++;
     cur.setUTCDate(cur.getUTCDate() - 1);
   }
@@ -213,30 +230,40 @@ function streakFromDays(daySet, today) {
 export async function stats(req, res) {
   const userId = req.user.id;
   const weeks = Math.max(1, Math.min(52, parseInt(req.query.weeks) || 12));
+  const tzRaw = parseInt(req.query.tzOffsetMin);
+  // A timezone that isn't a plausible UTC offset (max is UTC+14) is treated as absent, not
+  // clamped into range — clamping would silently attribute sessions to the wrong day instead of
+  // just falling back to UTC.
+  const tz = Number.isFinite(tzRaw) && Math.abs(tzRaw) <= 840 ? tzRaw : 0;
 
   const sessions = await WorkoutSession.find({ userId })
     .select('startedAt durationSec completed name workoutId kind')
     .sort({ startedAt: -1 })
     .limit(MAX_SCAN)
     .lean();
+  // MAX_SCAN bounds a single request's work; a user past it has their oldest sessions excluded
+  // from every total below rather than the request scanning without limit. `truncated` says so,
+  // instead of quietly mislabeling "all-time" totals as if they covered fewer sessions than they
+  // really do.
+  const truncated = sessions.length === MAX_SCAN;
 
   const totalSessions = sessions.length;
   const totalSeconds = sessions.reduce((a, s) => a + (s.durationSec || 0), 0);
-  const days = new Set(sessions.map((s) => dayKey(s.startedAt)));
-  const currentStreakDays = streakFromDays(days, new Date());
+  const days = new Set(sessions.map((s) => dayKey(s.startedAt, tz)));
+  const currentStreakDays = streakFromDays(days, new Date(), tz);
 
   // One bucket per week, oldest first, including the weeks with nothing in them — a gap is
   // information, and the chart must be able to draw it.
   const byWeek = new Map();
   sessions.forEach((s) => {
-    const k = weekKey(s.startedAt);
+    const k = weekKey(s.startedAt, tz);
     const b = byWeek.get(k) || { week: k, sessions: 0, seconds: 0 };
     b.sessions += 1;
     b.seconds += s.durationSec || 0;
     byWeek.set(k, b);
   });
   const weekly = [];
-  const cursor = new Date(weekKey(new Date()));
+  const cursor = new Date(weekKey(new Date(), tz));
   cursor.setUTCDate(cursor.getUTCDate() - 7 * (weeks - 1));
   for (let i = 0; i < weeks; i++) {
     const k = cursor.toISOString().slice(0, 10);
@@ -284,5 +311,10 @@ export async function stats(req, res) {
     weekly,
     topWorkouts,
     topExercises,
+    truncated,
   });
 }
+
+// Test seam: the timezone-shift math is easiest to pin with fixed instants rather than
+// "now"-relative ones, which would make the test flaky depending on wall-clock time at test run.
+export const __tz = { dayKey, weekKey, streakFromDays };

@@ -105,6 +105,15 @@ describe.skipIf(!dbReady)('sessions, set logs and stats', () => {
     expect(next.body.sessions.map(s => s.name)).toEqual(['Run 2', 'Run 3']);
   });
 
+  // Code review (server #10): an unparseable `before` used to be silently ignored and answer the
+  // newest page, which a paginating client reads as "there's more" and loops on forever.
+  it('rejects an unparseable before instead of silently returning the first page', async () => {
+    const auth = await login('badbefore@x.com');
+    await request(app).post('/api/sessions').set(auth).send({ session: aSession() });
+    const res = await request(app).get('/api/sessions?before=not-a-date').set(auth);
+    expect(res.status).toBe(400);
+  });
+
   it('keeps one user out of another user\'s history', async () => {
     const a = await login('a@x.com');
     const b = await login('b@x.com');
@@ -142,6 +151,17 @@ describe.skipIf(!dbReady)('sessions, set logs and stats', () => {
     expect(swings.body.logs).toHaveLength(1);
     expect(swings.body.logs[0].source).toBe('voice');
     expect(swings.body.logs[0].weight).toBe(25);
+  });
+
+  // Code review (server #11): phasesDone/totalPhases had a floor but no ceiling, unlike every
+  // other numeric field here — an absurd value (1e308) rendered a nonsense completion ratio.
+  it('clamps an absurd phasesDone/totalPhases instead of storing it verbatim', async () => {
+    const auth = await login('phases@x.com');
+    await request(app).post('/api/sessions').set(auth)
+      .send({ session: aSession({ phasesDone: 1e308, totalPhases: 1e308 }) });
+    const { body } = await request(app).get('/api/sessions').set(auth);
+    expect(body.sessions[0].phasesDone).toBeLessThanOrEqual(100000);
+    expect(body.sessions[0].totalPhases).toBeLessThanOrEqual(100000);
   });
 
   it('rejects out-of-range set logs', async () => {
@@ -189,6 +209,52 @@ describe.skipIf(!dbReady)('sessions, set logs and stats', () => {
     expect(body.weekly).toHaveLength(12);
     expect(body.weekly.every(w => w.sessions === 0)).toBe(true);
     expect(body.topWorkouts).toEqual([]);
+    expect(body.truncated).toBe(false);
+  });
+
+  // Code review (server #6): dayKey/weekKey/streakFromDays used the server's UTC clock, so a
+  // session logged in the evening in a negative-UTC-offset timezone was attributed to the
+  // following calendar day. Tested against fixed instants (not "now") so it can't be flaky
+  // depending on wall-clock time at test run — the integration-level version of this using
+  // relative dates has no way to control which side of a day boundary "now" falls on.
+  it('shifts the calendar day/week by tzOffsetMin (dayKey/weekKey)', async () => {
+    const { __tz } = await import('../../src/controllers/log.controller.js');
+    // 23:00 UTC on a Tuesday. At UTC-8 (tzOffsetMin -480) that's 15:00 local — still Tuesday.
+    // At UTC+2 (tzOffsetMin +120) that's 01:00 the NEXT day — Wednesday.
+    const tuesdayLateUTC = '2026-01-06T23:00:00.000Z'; // a Tuesday
+    expect(__tz.dayKey(tuesdayLateUTC, 0)).toBe('2026-01-06');
+    expect(__tz.dayKey(tuesdayLateUTC, -480)).toBe('2026-01-06');
+    expect(__tz.dayKey(tuesdayLateUTC, 120)).toBe('2026-01-07');
+
+    // A Tuesday shifting into Wednesday stays in the same ISO week either way — pick a Sunday
+    // late at night instead, where shifting into Monday crosses into the FOLLOWING week.
+    const sundayLateUTC = '2026-01-11T23:00:00.000Z'; // a Sunday
+    expect(__tz.weekKey(sundayLateUTC, 0)).toBe('2026-01-05');   // the week that Sunday closes
+    expect(__tz.weekKey(sundayLateUTC, 120)).toBe('2026-01-12'); // now Monday: the next week
+  });
+
+  it('shifts the streak boundary the same way (streakFromDays)', async () => {
+    const { __tz } = await import('../../src/controllers/log.controller.js');
+    // A session at 23:30 UTC Tuesday, read as "now" at 00:30 UTC Wednesday (one UTC calendar
+    // day later, one hour of wall-clock time later).
+    const sessionAt = '2026-01-06T23:30:00.000Z';
+    const nowAt = '2026-01-07T00:30:00.000Z';
+    const days = new Set([__tz.dayKey(sessionAt, 0)]);
+    // Plain UTC: session is "yesterday" relative to now -> counts toward the streak.
+    expect(__tz.streakFromDays(days, nowAt, 0)).toBe(1);
+    // At UTC-1 (tzOffsetMin -60), both instants shift into the SAME local day (Tuesday), so the
+    // session is "today", not "yesterday" — streakFromDays only looks at today-or-yesterday, and
+    // a same-day session still counts once relative to itself.
+    const daysShifted = new Set([__tz.dayKey(sessionAt, -60)]);
+    expect(__tz.streakFromDays(daysShifted, nowAt, -60)).toBe(1);
+  });
+
+  it('ignores an out-of-range tzOffsetMin rather than misattributing every session', async () => {
+    const auth = await login('badtz@x.com');
+    await request(app).post('/api/sessions').set(auth).send({ session: aSession() });
+    const res = await request(app).get('/api/stats?tzOffsetMin=999999').set(auth);
+    expect(res.status).toBe(200);
+    expect(res.body.totalSessions).toBe(1);
   });
 
   it('DELETE /api/account clears sessions and logs too', async () => {
@@ -234,6 +300,31 @@ describe.skipIf(!dbReady)('discover and per-workout history', () => {
 
   it('requires auth for discover', async () => {
     expect((await request(app).get('/api/discover')).status).toBe(401);
+  });
+
+  // Code review (server #7): with no cache and a cooldown from a recent failure, discover() used
+  // to still attempt a fresh upstream fetch on every request. It should now short-circuit to the
+  // stale/error response without touching fetchInFlight at all.
+  it('serves a stale item during the post-failure cooldown instead of retrying immediately', async () => {
+    const auth = await login('discfail@x.com');
+    const { __setDiscoverCache, __setDiscoverFailure } = await import('../../src/controllers/discover.controller.js');
+    __setDiscoverCache({ name: 'Old Item', description: 'From before the failure.' }, Date.now() - 25 * 3600 * 1000); // expired
+    __setDiscoverFailure(Date.now());
+
+    const res = await request(app).get('/api/discover').set(auth);
+    expect(res.status).toBe(200);
+    expect(res.body.exercise.name).toBe('Old Item');
+    expect(res.body.stale).toBe(true);
+  });
+
+  it('answers 503 in the cooldown window with no cache to fall back on', async () => {
+    const auth = await login('discfail2@x.com');
+    const { __setDiscoverCache, __setDiscoverFailure } = await import('../../src/controllers/discover.controller.js');
+    __setDiscoverCache(null, 0); // module-level cache is shared across tests in this file — clear it
+    __setDiscoverFailure(Date.now());
+
+    const res = await request(app).get('/api/discover').set(auth);
+    expect(res.status).toBe(503);
   });
 });
 

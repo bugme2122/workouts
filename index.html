@@ -105,8 +105,8 @@
       </div>
 
       <div class="lpnavfoot">
-        <div class="lpwho" id="lpWho"></div>
-        <p class="lpnavnote" id="lpSyncNote"></p>
+        <div class="lpwho" data-who></div>
+        <p class="lpnavnote" data-syncnote></p>
       </div>
     </nav>
 
@@ -333,7 +333,7 @@
   <div class="prog"><i id="progbar"></i></div>
 
   <div class="setlog" id="setLog">
-    <button class="setlog-open" id="setLogOpen">+ Log a set</button>
+    <button class="setlog-open" id="setLogOpen" aria-expanded="false" aria-controls="setLogBody">+ Log a set</button>
     <div class="setlog-body" id="setLogBody" hidden>
       <label class="setlog-lab" for="setLogInput">What did you just do?</label>
       <div class="setlog-row">

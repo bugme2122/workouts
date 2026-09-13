@@ -14,6 +14,14 @@ const TTL_MS = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = 4000;
 
 let cache = { at: 0, item: null };
+// In-flight fetch, shared by concurrent callers so a cold cache costs ONE upstream request no
+// matter how many requests arrive while it's warming — without this, N concurrent callers made N
+// upstream calls. Separately, a failed fetch is remembered for a short cooldown so a dead upstream
+// is retried at most once a minute rather than on every single request (each paying a fresh
+// timeout) until the cache warms again.
+let fetchInFlight = null;
+let lastFailAt = 0;
+const FAIL_COOLDOWN_MS = 60 * 1000;
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
@@ -37,16 +45,18 @@ function fetchJson(url) {
   });
 }
 
-// wger's descriptions are HTML written by contributors. Strip tags and collapse whitespace:
-// the client renders this as text, and nothing that arrives here should be able to reach the DOM
-// as markup even if that changes.
+// wger's descriptions are HTML written by contributors. Decode entities FIRST, then strip tags:
+// stripping first and decoding after let a double-encoded "&amp;lt;script&amp;gt;" — which has no
+// literal "<"/">" for the tag regex to catch — decode, post-strip, into a literal "<script>" in
+// the JSON payload. Decoding first turns it into a real tag while there is still a strip pass
+// ahead of it, so nothing that arrives here can reach the DOM as markup even if that changes.
 function toText(html, max = 420) {
   const s = String(html || '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return s.length > max ? s.slice(0, max - 1).replace(/\s+\S*$/, '') + '…' : s;
@@ -61,33 +71,49 @@ function pickForToday(list) {
   return usable[dayNumber % usable.length];
 }
 
+async function refreshCache() {
+  const data = await fetchJson(WGER_URL);
+  const items = (data && Array.isArray(data.results) ? data.results : [])
+    .map((base) => {
+      const all = base.translations || base.exercises || [];
+      const tr = all.find((e) => e.language === 2) || all[0];
+      return tr && tr.name ? { name: toText(tr.name, 80), description: toText(tr.description) } : null;
+    })
+    .filter(Boolean);
+
+  const item = pickForToday(items);
+  if (!item) throw new Error('no usable exercise in upstream response');
+  cache = { at: Date.now(), item };
+  return item;
+}
+
 export async function discover(req, res) {
   if (cache.item && Date.now() - cache.at < TTL_MS) {
     return res.json({ exercise: cache.item, cached: true });
   }
+  if (Date.now() - lastFailAt < FAIL_COOLDOWN_MS) {
+    // Upstream failed recently; don't pay another timeout for every request until the cooldown
+    // passes. A stale item still beats an error.
+    if (cache.item) return res.json({ exercise: cache.item, cached: true, stale: true });
+    return res.status(503).json({ error: 'Could not reach the exercise database.' });
+  }
   try {
-    const data = await fetchJson(WGER_URL);
-    const items = (data && Array.isArray(data.results) ? data.results : [])
-      .map((base) => {
-        const all = base.translations || base.exercises || [];
-        const tr = all.find((e) => e.language === 2) || all[0];
-        return tr && tr.name ? { name: toText(tr.name, 80), description: toText(tr.description) } : null;
-      })
-      .filter(Boolean);
-
-    const item = pickForToday(items);
-    if (!item) return res.status(502).json({ error: 'No exercise available right now.' });
-
-    cache = { at: Date.now(), item };
+    // Share one in-flight fetch across concurrent callers instead of one upstream call each.
+    if (!fetchInFlight) fetchInFlight = refreshCache().finally(() => { fetchInFlight = null; });
+    const item = await fetchInFlight;
     res.json({ exercise: item, cached: false });
   } catch (e) {
+    lastFailAt = Date.now();
     // A stale item beats an error: this is a nice-to-have, not a feature anything depends on.
     if (cache.item) return res.json({ exercise: cache.item, cached: true, stale: true });
     res.status(503).json({ error: 'Could not reach the exercise database.' });
   }
 }
 
-// Test seam: lets the integration tests exercise the route without reaching the network.
+// Test seams: let the integration tests exercise the route without reaching the network.
 export function __setDiscoverCache(item, at = Date.now()) {
   cache = { at, item };
+}
+export function __setDiscoverFailure(at = Date.now()) {
+  lastFailAt = at;
 }
