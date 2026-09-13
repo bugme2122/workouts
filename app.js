@@ -5,7 +5,7 @@ import {
 import {
   blockLenOf, blocksFor, buildPhases, migrate, sanitize,
   clampPeople, occupants, setDefaults, secondCue, decideBoot, isIdle, advancePhases,
-  summarizeConfig, gearOf, resolveSurface,
+  summarizeConfig, gearOf, resolveSurface, elapsedSeconds, shouldRecordSession,
   validateRegimen, sanitizeRegimen, buildRegimenPhases, REGIMEN_SCHEMA,
   guestAccessLabel,
 } from "./engine.js";
@@ -134,6 +134,13 @@ async function onAuthChange(u){
         const merged=store.mergePresets(ladder, regimens, pins);
         if(Object.keys(merged).length){ await cloud.savePresets(merged); noteSync(true,"presets"); }
       }catch(e){ noteSync(false,"preset sync",e); }
+      // History: send anything this device recorded while signed out or offline, then read the
+      // most recent run back for the lobby hero.
+      try{
+        const r = await store.flushSessionQueue(cloud);
+        if(r.sent) noteSync(true, "session");
+      }catch(e){ noteSync(false,"session flush",e); }
+      await loadLastSession();
     }catch(e){ noteSync(false,"sync",e); /* keep local config on any cloud error */ }
   } else {
     clearTimeout(_cfgSaveT); cloud=null; _syncState="";
@@ -229,7 +236,7 @@ document.addEventListener("visibilitychange",()=>{
   if(remaining<=0){
     const adv=advancePhases(phases, idx, remaining);
     idx=adv.idx; remaining=adv.remaining; cueSec=null;
-    if(adv.finished){ finished=true; running=false; releaseWake(); sDone(); say("Workout complete"); render(); showComplete(); return; }
+    if(adv.finished){ finished=true; running=false; releaseWake(); sDone(); say("Workout complete"); recordRun(true); render(); showComplete(); return; }
     enterPhase(phases[idx], phases[idx].type==="work"&&phases[idx].iv===0);
   }
   render();
@@ -363,8 +370,7 @@ function renderRegimenView(p){
     host.textContent = (finished||!nx) ? "" : "Next: " + (nx.label || (nx.type==="work"?"Work":"Rest")) + " · " + nx.dur + "s";
   }
 
-  const elapsed = cum[idx] + (p.type==="prep"?0:(p.dur - remaining/1000));
-  const e = finished?WORKOUT_TOTAL:Math.max(0,Math.min(WORKOUT_TOTAL,elapsed));
+  const e = elapsedNow();
   elElap.textContent=fmt(e);
   elTot.textContent= finished?"Done":fmt(WORKOUT_TOTAL-e);
   elProg.style.width=(100*e/(WORKOUT_TOTAL||1)).toFixed(1)+"%";
@@ -403,8 +409,7 @@ function render(){
   renderBigCircuit(disp);
   document.querySelectorAll("#personCards .pcard").forEach(c=>c.classList.toggle("rotate-flash", rot));
 
-  const elapsed = cum[idx] + (p.type==="prep"?0:(p.dur - remaining/1000));
-  const e = finished?WORKOUT_TOTAL:Math.max(0,Math.min(WORKOUT_TOTAL,elapsed));
+  const e = elapsedNow();
   elElap.textContent=fmt(e);
   elTot.textContent= finished?"Done":fmt(WORKOUT_TOTAL-e);
   elProg.style.width=(100*e/(WORKOUT_TOTAL||1)).toFixed(1)+"%";
@@ -450,7 +455,7 @@ function loop(){
     // phase actually landed on (GAPS #7).
     const adv=advancePhases(phases, idx, remaining);
     idx=adv.idx; remaining=adv.remaining; cueSec=null;
-    if(adv.finished){ finished=true; running=false; releaseWake(); sDone(); say("Workout complete"); render(); showComplete(); return; }
+    if(adv.finished){ finished=true; running=false; releaseWake(); sDone(); say("Workout complete"); recordRun(true); render(); showComplete(); return; }
     const np=phases[idx]; enterPhase(np, np.type==="work"&&np.iv===0);
   }
   render(); rafId=requestAnimationFrame(loop);
@@ -460,10 +465,15 @@ function start(){
   if(finished) reset();
   if(running){ running=false; if(rafId) cancelAnimationFrame(rafId); releaseWake(); render(); return; }
   running=true; last=performance.now(); cueSec=null; acquireWake();
+  if(runStartAt === null){ runStartAt = Date.now(); runRecorded = false; }
   if(idx===0 && phases[0].type==="prep") say("Get ready");
   render(); rafId=requestAnimationFrame(loop);
 }
-function reset(){ running=false; finished=false; if(rafId) cancelAnimationFrame(rafId); releaseWake(); idx=0; remaining=phases[0].dur*1000; cueSec=null; render();
+function reset(){
+  // Reset is the end of the current run, not a pause: bank whatever was done before clearing.
+  if(runStartAt !== null && !runRecorded) recordRun(finished);
+  runStartAt = null; runRecorded = false;
+  running=false; finished=false; if(rafId) cancelAnimationFrame(rafId); releaseWake(); idx=0; remaining=phases[0].dur*1000; cueSec=null; render();
   $("doneCard").hidden = true; elTcard.style.display = ""; }
 
 function showComplete() {
@@ -862,6 +872,69 @@ $("buildOwn").onclick = () => { if(!authUser){ showScreen("welcome"); return; } 
 
 
 
+
+// ---------- recording a run (History) ----------
+// A run is recorded when it ends: finished, or left/reset partway through. Writes go to the
+// cloud when signed in and to a local queue otherwise, so a logging failure can never break —
+// or even interrupt — the timer. Nothing about the workout depends on the result.
+let runStartAt = null, runRecorded = false;
+
+function elapsedNow(){
+  return elapsedSeconds({
+    cum, idx, phase: phases[idx], remainingMs: remaining, finished, total: WORKOUT_TOTAL,
+  });
+}
+
+function runName(){
+  if(activeKind === "regimen") return (activeRegimen && activeRegimen.name) || "Uploaded workout";
+  const w = WORKOUTS.find(x => x.id === config.workoutId);
+  return w ? w.name : "Custom circuit";
+}
+
+// Snapshot the run as it was actually performed — editing the workout later must not rewrite
+// what you did. Called from finish, from leaving the live screen, and from reset.
+function recordRun(completed){
+  if(runRecorded || runStartAt === null) return;
+  const elapsed = Math.round(elapsedNow());
+  runRecorded = true;                       // whatever happens next, don't write this run twice
+  if(!shouldRecordSession(elapsed, completed)) return;
+
+  const session = {
+    kind: activeKind === "regimen" ? "regimen" : "circuit",
+    name: runName(),
+    workoutId: activeKind === "regimen" ? null : (config.workoutId || null),
+    startedAt: new Date(runStartAt).toISOString(),
+    durationSec: elapsed,
+    completed: !!completed,
+    phasesDone: Math.max(0, idx),
+    totalPhases: Math.max(0, phases.length - 1),
+    people: activeKind === "regimen" ? 1 : config.people,
+    ladder: activeKind === "regimen" ? [] : config.ladder,
+    stations: activeKind === "regimen" ? [] : config.stations.map(st => st.ex),
+  };
+
+  if(cloud){
+    cloud.saveSession(session)
+      .then(() => { noteSync(true, "session"); lastSession = session; refreshLandingIfVisible(); })
+      .catch(e => { noteSync(false, "session save", e); store.local.queueSession(session); });
+  } else {
+    // Guests and offline runs: keep it until there is somewhere to send it.
+    store.local.queueSession(session);
+  }
+  lastSession = session;
+}
+
+// The most recent run, for the landing hero. Read from the cloud on sign-in; falls back to
+// whatever this device recorded while it was waiting to sync.
+let lastSession = null;
+async function loadLastSession(){
+  if(!cloud) return;
+  try{
+    const list = await cloud.listSessions({ limit: 1 });
+    if(list.length) lastSession = list[0];
+  }catch(e){ noteSync(false, "history load", e); }
+}
+
 // ================= APPEARANCE =================
 // One place decides which surface every screen paints (the rule itself is pure and tested:
 // engine.resolveSurface). The live timer is always dark; everything else follows
@@ -900,6 +973,290 @@ function renderAppearance(){
     ? "Follows your device. The workout timer stays dark either way."
     : "The workout timer stays dark either way — it is easier to read across a room.";
 }
+
+
+// ================= HISTORY =================
+// Everything on this screen is recorded data. Nothing is inferred, and a guest — who has no
+// account to record against — is told that plainly rather than shown an empty chart.
+let histRangeWeeks = 12, histFilter = "all", histSessions = [], histStats = null, histMore = true;
+const HIST_PAGE = 25;
+
+async function goHistory(){
+  showScreen("history");
+  renderHistory();                 // paint the shell immediately, then fill it
+  await loadHistory();
+  renderHistory();
+}
+
+async function loadHistory(){
+  if(!cloud){ histSessions = []; histStats = null; return; }
+  try{
+    const [stats, sessions] = await Promise.all([
+      cloud.stats(histRangeWeeks),
+      cloud.listSessions({ limit: HIST_PAGE }),
+    ]);
+    histStats = stats;
+    histSessions = sessions;
+    histMore = sessions.length === HIST_PAGE;
+    noteSync(true, "history");
+  }catch(e){
+    noteSync(false, "history load", e);
+  }
+}
+
+// Durations, spoken the way a person would. A 40-second run is "under a minute", not "0 min".
+function fmtDuration(sec){
+  if(sec < 60) return "under a minute";
+  const m = Math.round(sec/60);
+  if(m < 60) return m + " min";
+  return Math.floor(m/60) + "h " + String(m%60).padStart(2,"0") + "m";
+}
+// Same, with the number emphasised for list rows.
+function durationHTML(sec){
+  if(sec < 60) return "under a minute";
+  const m = Math.round(sec/60);
+  if(m < 60) return "<b>" + m + "</b> min";
+  return "<b>" + Math.floor(m/60) + "</b>h <b>" + String(m%60).padStart(2,"0") + "</b>m";
+}
+function weekLabel(iso){
+  const d = new Date(iso + "T00:00:00Z");
+  return d.toLocaleDateString(undefined, { day:"numeric", month:"short", timeZone:"UTC" });
+}
+
+function renderHistoryChart(){
+  const host = $("histBars"), yAxis = $("histY"), grid = $("histGrid"), xAxis = $("histX");
+  const data = (histStats && histStats.weekly) || [];
+  if(!data.length){
+    host.innerHTML = ""; yAxis.innerHTML = ""; grid.innerHTML = ""; xAxis.innerHTML = "";
+    return;
+  }
+  const mins = data.map(w => Math.round(w.seconds/60));
+  const peak = Math.max(...mins, 0);
+  const top = Math.max(30, Math.ceil(peak/30)*30);
+  const ticks = [top, Math.round(top*2/3), Math.round(top/3), 0];
+  yAxis.innerHTML = ticks.map(t => "<span>" + t + "</span>").join("");
+  grid.innerHTML = ticks.map(() => "<i></i>").join("");
+
+  const maxI = mins.indexOf(peak);
+  host.innerHTML = data.map((w, i) => {
+    const m = mins[i], isNow = i === data.length-1;
+    // "Zero" means no sessions, not zero minutes: a run too short to round up to a minute still
+    // happened, so it gets a visible stub rather than the empty-week tick.
+    const empty = !w.sessions;
+    const height = empty ? 0 : Math.max(3, 100*m/top);
+    // Direct-label the peak and the current week only; a number on every bar is noise.
+    // Sit the label just above the fill it labels, not at the top of the full-height column.
+    const lab = (m && (i === maxI || isNow))
+      ? '<span class="lab" style="bottom:calc(' + height + '% + 4px)">' + m + "</span>" : "";
+    return '<button class="bar' + (isNow ? " now" : "") + (empty ? " zero" : "") + '" data-i="' + i + '" ' +
+      'aria-label="Week of ' + esc(weekLabel(w.week)) + ": " + m + " minutes over " + w.sessions + ' sessions">' +
+      lab + '<span class="fill" style="height:' + height + '%"></span></button>';
+  }).join("");
+
+  const every = data.length > 14 ? 4 : 2;
+  xAxis.innerHTML = data.map((w,i) =>
+    "<span>" + ((i % every === 0 || i === data.length-1) ? esc(weekLabel(w.week)) : "") + "</span>").join("");
+
+  $("histTable").querySelector("tbody").innerHTML = data.map((w,i) =>
+    "<tr><td>" + esc(weekLabel(w.week)) + "</td><td>" + w.sessions + "</td><td>" + mins[i] + "</td></tr>").join("");
+
+  const plot = $("histPlot");
+  plot.querySelectorAll(".bar").forEach(bar => {
+    const w = data[+bar.dataset.i], m = mins[+bar.dataset.i];
+    const show = () => {
+      hide();
+      const tip = document.createElement("div");
+      tip.className = "charttip"; tip.id = "charttip";
+      tip.innerHTML = w.sessions
+        ? "Week of " + esc(weekLabel(w.week)) + "<br><b>" + m + "</b> min · <b>" + w.sessions + "</b> session" + (w.sessions>1?"s":"")
+        : "Week of " + esc(weekLabel(w.week)) + "<br>No sessions";
+      plot.appendChild(tip);
+      const r = bar.getBoundingClientRect(), pr = plot.getBoundingClientRect();
+      tip.style.left = (r.left - pr.left + r.width/2) + "px";
+      tip.style.top = Math.max(18, r.top - pr.top + r.height*(1 - (m/top)) - 8) + "px";
+    };
+    const hide = () => { const t = $("charttip"); if(t) t.remove(); };
+    bar.addEventListener("mouseenter", show);
+    bar.addEventListener("focus", show);
+    bar.addEventListener("mouseleave", hide);
+    bar.addEventListener("blur", hide);
+  });
+}
+
+function renderHistorySessions(){
+  const host = $("histSessions");
+  if(!authUser){
+    host.innerHTML = '<div class="lpempty"><b>History needs an account.</b>' +
+      "Sessions are recorded to your account, so they follow you between devices. " +
+      "Runs you finish as a guest are kept on this device and uploaded when you sign in.</div>";
+    $("histFilters").innerHTML = ""; $("histMore").hidden = true;
+    return;
+  }
+  const counts = {
+    all: histSessions.length,
+    finished: histSessions.filter(x => x.completed).length,
+    stopped: histSessions.filter(x => !x.completed).length,
+  };
+  const LABELS = { all:"All", finished:"Finished", stopped:"Stopped early" };
+  const keys = counts.all ? ["all","finished","stopped"].filter(k => k==="all" || counts[k]) : [];
+  if(!keys.includes(histFilter)) histFilter = "all";
+  $("histFilters").innerHTML = keys.length < 2 ? "" : keys.map(k =>
+    '<button data-h="' + k + '" aria-pressed="' + (k===histFilter) + '">' + LABELS[k] + " " + counts[k] + "</button>").join("");
+  $("histFilters").querySelectorAll("button").forEach(b => {
+    b.onclick = () => { histFilter = b.dataset.h; renderHistorySessions(); };
+  });
+
+  const list = histSessions.filter(x =>
+    histFilter === "all" ? true : histFilter === "finished" ? x.completed : !x.completed);
+
+  if(!list.length){
+    host.innerHTML = '<div class="lpempty"><b>' +
+      (histSessions.length ? "No sessions match that filter." : "No sessions yet.") + "</b>" +
+      (histSessions.length ? "Clear the filter to see them all."
+                           : "Finish a workout and it shows up here — what you ran, how long, and how far you got.") +
+      "</div>";
+    $("histMore").hidden = true;
+    return;
+  }
+
+  let html = "", group = null;
+  list.forEach((x, i) => {
+    const g = groupLabel(x.startedAt);
+    if(g !== group){ if(group) html += "</div>"; group = g; html += '<div class="daygroup"><div class="dayhead">' + esc(g) + "</div>"; }
+    const when = new Date(x.startedAt);
+    html +=
+      '<div class="sess">' +
+        '<div class="sess-top">' +
+          '<div class="when">' + esc(when.toLocaleDateString(undefined,{weekday:"short"})) + " " +
+            esc(when.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})) + "</div>" +
+          "<div><div class=\"nm\">" + esc(x.name) + "</div>" +
+            '<div class="meta">' + durationHTML(x.durationSec) + "<span>·</span>" +
+              (x.people > 1 ? "<b>" + x.people + "</b> people" : "solo") +
+              '<span class="state ' + (x.completed ? "done" : "part") + '">' +
+              (x.completed ? "Finished" : "Stopped early") + "</span>" +
+              (x.totalPhases ? "<span>· " + x.phasesDone + " of " + x.totalPhases + " segments</span>" : "") +
+            "</div></div>" +
+          '<div class="strip sm" data-i="' + i + '" aria-hidden="true"></div>' +
+          '<button class="expand" data-i="' + i + '" aria-expanded="false">Details</button>' +
+        "</div>" +
+        '<div class="sess-detail" id="sd-' + i + '" hidden></div>' +
+      "</div>";
+  });
+  host.innerHTML = html + "</div>";
+
+  host.querySelectorAll(".strip").forEach(el => drawStrip(el, list[+el.dataset.i].ladder));
+  host.querySelectorAll(".expand").forEach(b => {
+    b.onclick = () => toggleSessionDetail(b, list[+b.dataset.i]);
+  });
+  $("histMore").hidden = !histMore;
+}
+
+// "This week" / "Last week" / "August" — how someone would name the pile, not an ISO date.
+function groupLabel(iso){
+  const d = new Date(iso), now = new Date();
+  const days = Math.floor((now - d) / 86400000);
+  if(days < 7) return "This week";
+  if(days < 14) return "Last week";
+  return d.toLocaleDateString(undefined, { month:"long", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+}
+
+async function toggleSessionDetail(btn, session){
+  const box = $("sd-" + btn.dataset.i);
+  if(!box.hidden){ box.hidden = true; btn.setAttribute("aria-expanded","false"); btn.textContent = "Details"; return; }
+  box.hidden = false; btn.setAttribute("aria-expanded","true"); btn.textContent = "Hide";
+  box.innerHTML = '<div class="hint">Loading…</div>';
+
+  let logs = [];
+  try{ if(cloud && session.id) logs = await cloud.listLogs({ sessionId: session.id, limit: 50 }); }
+  catch(e){ noteSync(false, "log load", e); }
+
+  const stations = (session.stations || []).length
+    ? session.stations.map(name => "<li>" + esc(name) + "<span></span></li>").join("")
+    : '<li>No station list recorded<span></span></li>';
+  const logList = logs.length
+    ? logs.map(l => "<li>" + esc(l.exercise) + "<span>" + l.sets + " × " + l.reps +
+        (l.unit === "bw" ? "" : " @ " + l.weight + " " + esc(l.unit)) + "</span></li>").join("")
+    : '<li>Nothing logged<span></span></li>';
+
+  box.innerHTML =
+    "<div><h4>How it ran</h4><ul>" + stations + "</ul></div>" +
+    "<div><h4>" + (logs.length ? "Sets you logged" : "No sets logged") + "</h4><ul>" + logList + "</ul>" +
+      '<button class="del" data-del="' + esc(session.id) + '">Delete this session</button></div>';
+
+  const del = box.querySelector("[data-del]");
+  if(del) del.onclick = async () => {
+    const yes = await askConfirm("Delete this session?",
+      "It disappears from your history, along with any sets logged during it. This cannot be undone.",
+      "Delete");
+    if(!yes) return;
+    try{
+      await cloud.deleteSession(session.id);
+      histSessions = histSessions.filter(x => x.id !== session.id);
+      if(lastSession && lastSession.id === session.id) lastSession = histSessions[0] || null;
+      histStats = await cloud.stats(histRangeWeeks);
+      renderHistory();
+    }catch(e){ noteSync(false, "session delete", e); }
+  };
+}
+
+function renderHistoryTop(){
+  const rows = (histStats && histStats.topWorkouts) || [];
+  const host = $("histTop");
+  if(!rows.length){ host.innerHTML = ""; return; }
+  host.innerHTML = rows.slice(0, 5).map(w =>
+    '<div class="lprow">' +
+      '<div><div class="nm"><span class="t">' + esc(w.name) + "</span></div>" +
+        '<div class="meta"><b>' + w.runs + "</b> run" + (w.runs===1?"":"s") + " · " + fmtDuration(w.seconds) +
+        " · " + w.completed + " finished · last " + esc(relativeDay(w.lastAt)) + "</div></div>" +
+      '<div></div><button class="go" data-w="' + esc(w.workoutId || "") + '">Start</button>' +
+    "</div>").join("");
+  host.querySelectorAll(".go").forEach(b => {
+    b.onclick = () => {
+      const w = WORKOUTS.find(x => x.id === b.dataset.w);
+      if(!w) return;
+      adoptLadder(); persistRegimen();
+      config = sanitize(workoutToConfig(w)); applyTheme(config.theme); persist();
+      build(); setupView(); reset(); showScreen("live"); ensureAudio();
+    };
+  });
+}
+
+function renderHistory(){
+  // Range chips
+  const chips = $("histRange");
+  chips.innerHTML = [6, 12, 26].map(w =>
+    '<button data-weeks="' + w + '" aria-pressed="' + (w===histRangeWeeks) + '">' + w + " weeks</button>").join("");
+  chips.querySelectorAll("button").forEach(b => {
+    b.onclick = async () => { histRangeWeeks = +b.dataset.weeks; await loadHistory(); renderHistory(); };
+  });
+
+  const st = histStats;
+  $("histSub").innerHTML = !authUser
+    ? "Sign in to keep a history across devices."
+    : (st && st.totalSessions)
+      ? "<b>" + st.totalSessions + "</b> session" + (st.totalSessions===1?"":"s") +
+        (st.firstSessionAt ? " since " + esc(new Date(st.firstSessionAt).toLocaleDateString(undefined,{day:"numeric",month:"long"})) : "") +
+        " · " + fmtDuration(st.totalSeconds) + " of work" +
+        (st.currentStreakDays > 1 ? " · <b>" + st.currentStreakDays + "</b> days in a row" : "")
+      : "Nothing recorded yet.";
+
+  renderHistoryChart();
+  renderHistorySessions();
+  renderHistoryTop();
+  const c = document.querySelector('[data-count="history"]');
+  if(c) c.textContent = (st && st.totalSessions) ? String(st.totalSessions) : "";
+}
+
+$("histMore").onclick = async () => {
+  const oldest = histSessions[histSessions.length - 1];
+  if(!oldest || !cloud) return;
+  try{
+    const more = await cloud.listSessions({ limit: HIST_PAGE, before: oldest.startedAt });
+    histSessions = histSessions.concat(more);
+    histMore = more.length === HIST_PAGE;
+    renderHistorySessions();
+  }catch(e){ noteSync(false, "history page", e); }
+};
 
 // ================= LANDING (the lobby) =================
 // Everything here renders from what the app already stores: the active config, saved ladder
@@ -946,6 +1303,29 @@ function activeBlurb(){
   return "Built here — your stations, your ladder, your people.";
 }
 
+// "When" line for the hero: a real last run if we have one, otherwise the setup loaded now.
+function heroWhen(mins, people, reg){
+  if(lastSession){
+    const when = relativeDay(lastSession.startedAt);
+    const how = lastSession.completed ? "finished" : "stopped early";
+    return "Last run " + when + " · " + how + " · " + fmtDuration(lastSession.durationSec);
+  }
+  return reg
+    ? "Loaded now · uploaded workout · " + mins + " min"
+    : "Loaded now · " + mins + " min · " + (people===1 ? "solo" : people + " people");
+}
+
+// "today" / "yesterday" / "on Tuesday" / "on 4 Aug" — the way someone would say it out loud.
+function relativeDay(iso){
+  const then = new Date(iso), now = new Date();
+  const days = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) -
+                           new Date(then.getFullYear(), then.getMonth(), then.getDate())) / 86400000);
+  if(days <= 0) return "today";
+  if(days === 1) return "yesterday";
+  if(days < 7) return "on " + then.toLocaleDateString(undefined, { weekday: "long" });
+  return "on " + then.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
 function renderLandingHero(){
   const reg = activeKind==="regimen" && activeRegimen;
   const built = reg ? buildRegimenPhases(activeRegimen) : null;
@@ -953,9 +1333,7 @@ function renderLandingHero(){
   const mins = reg ? Math.max(1, Math.round(built.total/60)) : sum.minutes;
   const people = reg ? 1 : sum.people;
 
-  $("lpResumeWhen").textContent = reg
-    ? "Loaded now · uploaded workout · " + mins + " min"
-    : "Loaded now · " + mins + " min · " + (people===1 ? "solo" : people + " people");
+  $("lpResumeWhen").textContent = heroWhen(mins, people, reg);
   $("lpResumeName").textContent = activeName();
   $("lpResumeBlurb").textContent = activeBlurb();
 
@@ -1124,15 +1502,14 @@ function renderLanding(){
 
 // Nav. One copy in index.html, cloned into the catalog screen, driven by delegation so both
 // copies behave identically and neither needs unique ids.
-{
-  const host = $("catNavHost");
-  const src = $("lpNav");
+["catNavHost", "histNavHost"].forEach(id => {
+  const host = $(id), src = $("lpNav");
   if(host && src){
     const copy = src.cloneNode(true);
     copy.removeAttribute("id");
     host.appendChild(copy);
   }
-}
+});
 document.addEventListener("click", (ev) => {
   const item = ev.target.closest && ev.target.closest(".lpnavitem");
   if(!item) return;
@@ -1142,6 +1519,7 @@ document.addEventListener("click", (ev) => {
                      else { goLanding(); setTimeout(()=>$("lpMineH").scrollIntoView({block:"start"}), 0); }
                      break;
     case "catalog":  showScreen("home"); break;
+    case "history":  goHistory(); break;
     case "settings": openSettings(); break;
     case "account":  authUser ? openAcctMenu(ev) : showScreen("welcome"); break;
   }
@@ -1149,7 +1527,9 @@ document.addEventListener("click", (ev) => {
 
 // Mark the current page in every nav copy, and keep the counts in step.
 function paintNav(){
-  const page = activeScreen === "home" ? "catalog" : activeScreen === "landing" ? "today" : "";
+  const page = activeScreen === "home" ? "catalog"
+             : activeScreen === "landing" ? "today"
+             : activeScreen === "history" ? "history" : "";
   document.querySelectorAll(".lpnavitem").forEach(b => {
     if(b.dataset.nav === page) b.setAttribute("aria-current", "page");
     else b.removeAttribute("aria-current");
@@ -1162,7 +1542,11 @@ $("lpAllWorkouts").onclick = () => showScreen("home");
 $("homeBack").onclick = () => goLanding();
 // Leaving a live workout pauses it rather than letting cues fire from a screen you can't see.
 // The paused position is still there when you come back.
-$("liveBack").onclick = () => { if(running) start(); goLanding(); };
+$("liveBack").onclick = () => {
+  if(running) start();          // pause first, so cues can't fire from a screen you can't see
+  recordRun(false);             // and bank the part you did do
+  goLanding();
+};
 $("lpStart").onclick = () => { build(); setupView(); reset(); showScreen("live"); ensureAudio(); };
 $("lpChange").onclick = () => {
   if(activeKind==="regimen"){ openSettings(); return; }

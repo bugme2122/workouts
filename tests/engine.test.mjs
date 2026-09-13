@@ -407,3 +407,31 @@ test("resolveSurface falls back to system for a junk preference", () => {
 test("surface is NOT shareable — a link can't change the recipient's theme", () => {
   assert.equal(SHARE_FIELDS.includes("surface"), false);
 });
+
+// ---------- recording a run ----------
+import { elapsedSeconds, shouldRecordSession, MIN_SESSION_SEC } from "../engine.js";
+
+test("elapsedSeconds ignores prep and counts the part of the phase already done", () => {
+  const cum = [0, 0, 60, 90];
+  // 20s into a 60s work phase that starts at cum 0.
+  assert.equal(elapsedSeconds({ cum, idx: 1, phase: { type: "work", dur: 60 }, remainingMs: 40000, finished: false, total: 300 }), 20);
+  // Prep contributes nothing.
+  assert.equal(elapsedSeconds({ cum, idx: 0, phase: { type: "prep", dur: 5 }, remainingMs: 3000, finished: false, total: 300 }), 0);
+});
+
+test("elapsedSeconds clamps to the workout total and reports the total once finished", () => {
+  const cum = [0, 0, 60];
+  assert.equal(elapsedSeconds({ cum, idx: 2, phase: { type: "rest", dur: 30 }, remainingMs: -5000, finished: false, total: 90 }), 90);
+  assert.equal(elapsedSeconds({ cum, idx: 0, phase: { type: "prep", dur: 5 }, remainingMs: 5000, finished: true, total: 90 }), 90);
+});
+
+test("elapsedSeconds survives a missing phase or cum entry", () => {
+  assert.equal(elapsedSeconds({ cum: [], idx: 3, phase: null, remainingMs: 0, finished: false, total: 60 }), 0);
+});
+
+test("shouldRecordSession keeps finished runs and drops accidental taps", () => {
+  assert.equal(shouldRecordSession(3, true), true);       // finished, however short
+  assert.equal(shouldRecordSession(3, false), false);     // started and abandoned
+  assert.equal(shouldRecordSession(MIN_SESSION_SEC, false), true);
+  assert.equal(shouldRecordSession(MIN_SESSION_SEC - 1, false), false);
+});

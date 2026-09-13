@@ -762,3 +762,84 @@ body.surface-dark .confirmcard{ background:var(--panel); }
   text-transform:none; border-radius:999px; background:var(--ink); color:var(--bg); }
 #sheet .presetrow .pn{ font-family:'Barlow',sans-serif; font-weight:500; text-transform:none; letter-spacing:0; }
 #sheet .fld{ font-family:'Barlow',sans-serif; }
+
+/* ===========================================================================
+   HISTORY (#screen-history) — recorded sessions. One series (minutes per week),
+   so the title names it and no legend is needed; the bars use the work mark in a
+   lighter step with the current week at full strength. A week with no sessions
+   still draws a baseline tick: a gap is information, not a rendering failure.
+   =========================================================================== */
+.chartwrap{ border:1px solid var(--line); border-radius:14px; padding:18px 20px 14px;
+  background:var(--panel); box-shadow:var(--shadow); }
+.chart-head{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.chart-head h3{ margin:0; font-family:'Barlow',sans-serif; font-size:16px; font-weight:600; }
+.charthint{ color:var(--dim); font-size:12.5px; margin-left:auto; }
+.chart{ position:relative; display:grid; grid-template-columns:34px minmax(0,1fr); gap:10px; }
+.yaxis{ display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end;
+  height:150px; font-size:11.5px; color:var(--dim); font-variant-numeric:tabular-nums; }
+.plot{ position:relative; height:150px; }
+.grid{ position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between; }
+.grid i{ height:1px; background:var(--line-soft); }
+.grid i:last-child{ background:var(--line); }
+.bars{ position:absolute; inset:0; display:flex; align-items:flex-end; gap:2px; }
+.bar{ flex:1; position:relative; display:flex; flex-direction:column; justify-content:flex-end;
+  height:100%; background:none; border:0; padding:0; min-width:0; cursor:pointer; }
+.bar .fill{ background:var(--work-soft); border-radius:4px 4px 0 0; width:100%; }
+.bar.now .fill{ background:var(--work-mark); }
+.bar.zero .fill{ background:var(--line); height:3px!important; border-radius:0; }
+.bar:hover .fill,.bar:focus-visible .fill{ background:var(--work-mark); }
+.bar .lab{ position:absolute; left:0; right:0; text-align:center; font-size:11.5px;
+  font-weight:600; font-variant-numeric:tabular-nums; color:var(--ink); pointer-events:none; }
+.xaxis{ grid-column:2; display:flex; gap:2px; margin-top:8px; }
+.xaxis span{ flex:1; text-align:center; font-size:11px; color:var(--dim); min-width:0;
+  overflow:hidden; white-space:nowrap; }
+.charttip{ position:absolute; z-index:5; background:var(--ink); color:var(--bg); border-radius:8px;
+  padding:7px 10px; font-size:12.5px; line-height:1.35; pointer-events:none;
+  transform:translate(-50%,-100%); white-space:nowrap; }
+.tablelink{ margin-top:12px; border-top:1px solid var(--line-soft); padding-top:10px; }
+.tablelink summary{ font-size:13.5px; color:var(--dim); cursor:pointer; }
+.tablelink table{ border-collapse:collapse; margin-top:10px; font-size:13.5px; width:100%; }
+.tablelink th,.tablelink td{ text-align:left; padding:5px 10px 5px 0;
+  border-bottom:1px solid var(--line-soft); font-variant-numeric:tabular-nums; }
+.tablelink th{ font-weight:600; color:var(--dim); font-size:12.5px; }
+
+.daygroup{ margin-top:22px; }
+.dayhead{ font-family:'Barlow',sans-serif; font-weight:600; font-size:14px; color:var(--dim);
+  padding-bottom:6px; border-bottom:1px solid var(--line); }
+.sess{ border-top:1px solid var(--line-soft); padding:13px 2px; }
+.sess:first-of-type{ border-top:0; }
+.sess-top{ display:grid; grid-template-columns:74px minmax(0,1fr) 110px auto; gap:14px; align-items:center; }
+.sess .when{ font-family:'Barlow Condensed',sans-serif; font-weight:600; color:var(--dim);
+  font-size:14px; font-variant-numeric:tabular-nums; }
+.sess .nm{ font-weight:600; font-size:15.5px; }
+.sess .meta{ color:var(--dim); font-size:13.5px; margin-top:2px; display:flex; gap:8px;
+  flex-wrap:wrap; align-items:center; }
+.sess .meta b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+.state{ font-size:12.5px; font-weight:600; border-radius:999px; padding:2px 9px; border:1px solid; }
+.state.done{ color:#1a6b3c; border-color:#bfe3cd; background:#f1faf4; }
+.state.part{ color:#8a5a00; border-color:#eddfbe; background:#fdf8ee; }
+body.surface-dark .state.done{ color:#7fd6a3; border-color:#24493a; background:#12241b; }
+body.surface-dark .state.part{ color:#e8b463; border-color:#4a3a1c; background:#241d10; }
+.sess .expand{ border:1px solid var(--line); background:var(--panel); border-radius:999px;
+  padding:6px 14px; font-family:'Barlow',sans-serif; font-size:13.5px; color:var(--ink); cursor:pointer; }
+.sess .expand:hover{ border-color:var(--ink); }
+.sess-detail[hidden]{ display:none; }
+.sess-detail{ margin:12px 0 2px 88px; padding:14px 16px; background:var(--board); border-radius:10px;
+  display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); }
+.sess-detail h4{ margin:0 0 6px; font-family:'Barlow',sans-serif; font-size:13px; font-weight:600; color:var(--dim); }
+.sess-detail ul{ margin:0; padding:0; list-style:none; font-size:14px; }
+.sess-detail li{ padding:3px 0; display:flex; gap:10px; justify-content:space-between;
+  border-bottom:1px solid var(--line-soft); }
+.sess-detail li:last-child{ border-bottom:0; }
+.sess-detail li span{ color:var(--dim); font-variant-numeric:tabular-nums; }
+.sess .del{ background:none; border:0; color:var(--dim); font-size:13px; cursor:pointer; padding:0; }
+.sess .del:hover{ color:var(--rest-mark); }
+
+@media (max-width:840px){
+  .sess-top{ grid-template-columns:minmax(0,1fr) auto; row-gap:4px; align-items:start; }
+  .sess .when{ grid-column:1 / -1; grid-row:1; }
+  .sess-top > div:nth-child(2){ grid-column:1; grid-row:2; }
+  .sess .strip{ display:none; }
+  .sess .expand{ grid-column:2; grid-row:2; align-self:center; }
+  .sess-detail{ margin-left:0; }
+}

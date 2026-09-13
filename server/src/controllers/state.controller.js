@@ -1,4 +1,6 @@
 import WorkoutState from '../models/WorkoutState.js';
+import WorkoutSession from '../models/WorkoutSession.js';
+import SetLog from '../models/SetLog.js';
 
 // Cap on a single stored blob (GAPS #16). The largest legitimate config/preset document is a few
 // KB; 64 KB is generous. The server must not trust the client's sanitize — a compromised session
@@ -59,8 +61,13 @@ export async function putPresets(req, res) {
   res.json({ ok: true });
 }
 
-// Delete-all: mirrors the old Firestore deleteAll() — removes the user's config + presets.
+// Delete-all: removes everything this user has stored — config, presets, recorded sessions and
+// set logs. Account deletion must not leave orphaned rows behind.
 export async function deleteAccount(req, res) {
-  await WorkoutState.deleteOne({ userId: req.user.id });
+  await Promise.all([
+    WorkoutState.deleteOne({ userId: req.user.id }),
+    WorkoutSession.deleteMany({ userId: req.user.id }),
+    SetLog.deleteMany({ userId: req.user.id }),
+  ]);
   res.status(204).end();
 }

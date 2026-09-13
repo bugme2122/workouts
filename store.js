@@ -14,6 +14,11 @@ const LS_REGIMEN = "ladder.regimen";
 const LS_REGIMEN_PRESETS = "ladder.regimenPresets";
 // Pinned rows on the landing page ("preset:Name" / "regimen:Name").
 const LS_PINS = "ladder.pins";
+// Sessions that could not be written to the cloud yet (offline, signed out, a failed request).
+// The timer must never be held up by a logging failure, so a failed write lands here and is
+// retried on the next sync.
+const LS_QUEUE = "ladder.sessionQueue";
+const MAX_QUEUE = 50;
 // Reserved key that namespaces regimen presets inside the single cloud presets document, so the
 // server's /api/presets contract stays unchanged. Rejected as a user-facing preset name.
 export const REGIMEN_NS = "__regimens__";
@@ -33,6 +38,9 @@ export const local = {
   saveRegimen(r) { try { r ? localStorage.setItem(LS_REGIMEN, JSON.stringify(r)) : localStorage.removeItem(LS_REGIMEN); } catch (e) {} },
   loadRegimenPresets() { try { return JSON.parse(localStorage.getItem(LS_REGIMEN_PRESETS) || "{}"); } catch (e) { return {}; } },
   saveRegimenPresets(o) { try { localStorage.setItem(LS_REGIMEN_PRESETS, JSON.stringify(o)); } catch (e) {} },
+  loadQueue() { try { const a = JSON.parse(localStorage.getItem(LS_QUEUE) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } },
+  saveQueue(a) { try { localStorage.setItem(LS_QUEUE, JSON.stringify((a || []).slice(-MAX_QUEUE))); } catch (e) {} },
+  queueSession(s) { const q = local.loadQueue(); q.push(s); local.saveQueue(q); },
   loadPins() { try { const a = JSON.parse(localStorage.getItem(LS_PINS) || "[]"); return Array.isArray(a) ? a.filter(x => typeof x === "string") : []; } catch (e) { return []; } },
   savePins(a) { try { localStorage.setItem(LS_PINS, JSON.stringify((a || []).filter(x => typeof x === "string"))); } catch (e) {} },
 };
@@ -80,6 +88,27 @@ export function cloudBackend() {
     async loadPresets() { const { presets } = await api.get("/presets"); return presets || {}; },
     async savePresets(o) { await api.put("/presets", { presets: o }); },
     async deleteAll() { await api.del("/account"); },
+    // --- recorded history ---
+    async saveSession(session) { return api.post("/sessions", { session }); },
+    async listSessions(params = {}) {
+      const q = new URLSearchParams();
+      if (params.limit) q.set("limit", params.limit);
+      if (params.before) q.set("before", params.before);
+      const { sessions } = await api.get("/sessions" + (q.toString() ? "?" + q : ""));
+      return sessions || [];
+    },
+    async deleteSession(id) { await api.del("/sessions/" + encodeURIComponent(id)); },
+    async stats(weeks) { return api.get("/stats" + (weeks ? "?weeks=" + weeks : "")); },
+    async saveLog(log) { const r = await api.post("/logs", { log }); return r.log; },
+    async listLogs(params = {}) {
+      const q = new URLSearchParams();
+      if (params.exercise) q.set("exercise", params.exercise);
+      if (params.sessionId) q.set("sessionId", params.sessionId);
+      if (params.limit) q.set("limit", params.limit);
+      const { logs } = await api.get("/logs" + (q.toString() ? "?" + q : ""));
+      return logs || [];
+    },
+    async deleteLog(id) { await api.del("/logs/" + encodeURIComponent(id)); },
   };
 }
 
@@ -99,4 +128,20 @@ export function decideMigration(localConfig, cloudConfig, { localAt = 0, cloudAt
 // overwrite, which discarded every preset made locally since the last sync (GAPS #1).
 export function mergePresetMaps(localPresets, cloudPresets) {
   return { ...(localPresets || {}), ...(cloudPresets || {}) };
+}
+
+// Push every queued session to the cloud, oldest first, and keep whatever still fails. Called
+// on sign-in and after a successful write, so a run recorded offline lands as soon as it can.
+export async function flushSessionQueue(cloud) {
+  if (!cloud) return { sent: 0, kept: local.loadQueue().length };
+  const queued = local.loadQueue();
+  if (!queued.length) return { sent: 0, kept: 0 };
+  const kept = [];
+  let sent = 0;
+  for (const s of queued) {
+    try { await cloud.saveSession(s); sent++; }
+    catch (e) { kept.push(s); }
+  }
+  local.saveQueue(kept);
+  return { sent, kept: kept.length };
 }

@@ -46,6 +46,12 @@ cd server && npm run create-admin  # provision a user (there is no self-registra
   engine/catalog/store import app.
 - `server/src/` — `routes/ → controllers/ → models/`, with `middleware/auth.js` (`verifyJWT`)
   applied per-route, not router-wide, so it never intercepts siblings like `/api/health`.
+- **History** is recorded server-side: `WorkoutSession` (one run, with a snapshot of the stations
+  and ladder as run) and `SetLog`, behind `/api/sessions`, `/api/logs` and `/api/stats`. A run is
+  recorded by `recordRun()` in app.js when it finishes, resets, or you leave the live screen;
+  runs shorter than `MIN_SESSION_SEC` that were not finished are dropped. A failed or signed-out
+  write goes to `store.local.queueSession()` and is flushed by `flushSessionQueue()` on the next
+  sign-in — **a logging failure must never interrupt the timer**.
 - Tests: client `tests/*.test.mjs` (`node:test` + `node:assert/strict`); server `server/tests/`
   (`vitest` + `supertest` + `mongodb-memory-server`). New pure logic gets a test; put logic in
   engine.js (or extract from app.js) to make it testable.
