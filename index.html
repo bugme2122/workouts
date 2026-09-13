@@ -42,7 +42,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./styles.css">
 </head>
-<body class="auth-light">
+<body class="surface-light">
 <section id="screen-welcome" class="screen">
   <div class="auth">
     <!-- The app's own mark: the timer ring with the interval dot. Inline SVG so it
@@ -78,12 +78,12 @@
   </div>
 </section>
 <!-- ============================ LANDING ============================
-     The lobby between sign-in and the catalog. Light surface (body.auth-light, toggled in
+     The lobby between sign-in and the catalog. Surface class is set in applySurface(),
      showScreen) — the timer is the app's only dark world. Everything here is rendered by
      renderLanding() in app.js from data the app already stores. -->
 <section id="screen-landing" class="screen">
   <div class="lp">
-    <nav class="lpnav" aria-label="Main">
+    <nav class="lpnav" id="lpNav" aria-label="Main">
       <div class="lpmark">
         <svg viewBox="0 0 48 48" role="img" aria-label="Ladder Circuit">
           <circle cx="24" cy="24" r="18" fill="none" stroke="#e3e5ea" stroke-width="5"></circle>
@@ -95,12 +95,12 @@
       </div>
 
       <div class="lpnavlist">
-        <button class="lpnavitem" id="navToday" aria-current="page"><i class="tick"></i>Today</button>
-        <button class="lpnavitem" id="navMine"><i class="tick"></i>My workouts<span class="lpcount" id="navMineCount"></span></button>
-        <button class="lpnavitem" id="navCatalog"><i class="tick"></i>Catalog<span class="lpcount" id="navCatCount"></span></button>
+        <button class="lpnavitem" data-nav="today"><i class="tick"></i>Today</button>
+        <button class="lpnavitem" data-nav="mine"><i class="tick"></i>My workouts<span class="lpcount" data-count="mine"></span></button>
+        <button class="lpnavitem" data-nav="catalog"><i class="tick"></i>Catalog<span class="lpcount" data-count="catalog"></span></button>
         <div class="lpnavrule"></div>
-        <button class="lpnavitem" id="navSounds"><i class="tick"></i>Sounds &amp; timing</button>
-        <button class="lpnavitem" id="navAccount"><i class="tick"></i>Account</button>
+        <button class="lpnavitem" data-nav="settings"><i class="tick"></i>Settings</button>
+        <button class="lpnavitem" data-nav="account"><i class="tick"></i>Account</button>
       </div>
 
       <div class="lpnavfoot">
@@ -152,11 +152,22 @@
 </section>
 
 <section id="screen-home" class="screen">
-  <div class="home">
-    <div class="hrow"><button class="homeback" id="homeBack">&lsaquo; Today</button><div class="brand"><b>Ladder</b> Circuit</div><div class="idcluster"><button class="iconbtn gearbtn" aria-label="Settings">&#9881;</button><button class="idchip" hidden aria-label="Account"></button></div></div>
-    <div class="lab">Pick a workout</div>
-    <div class="stack" id="catalogStack"></div>
-    <button class="browse" id="buildOwn">+ Build my own from scratch</button>
+  <div class="lp">
+    <!-- The nav is cloned from #lpNav at boot so there is exactly one copy in source. -->
+    <div class="lpnavhost" id="catNavHost"></div>
+    <main class="lpmain">
+      <div class="home">
+        <div class="hrow"><button class="homeback" id="homeBack">&lsaquo; Today</button><div class="brand"><b>Ladder</b> Circuit</div><div class="idcluster"><button class="iconbtn gearbtn" aria-label="Settings">&#9881;</button><button class="idchip" hidden aria-label="Account"></button></div></div>
+        <div class="cathead">
+          <div>
+            <h1>Catalog</h1>
+            <p id="catalogSub">Five workouts to start from. Customize any of them and keep the setup.</p>
+          </div>
+        </div>
+        <div class="stack" id="catalogStack"></div>
+        <button class="browse" id="buildOwn">+ Build my own from scratch</button>
+      </div>
+    </main>
   </div>
 </section>
 
@@ -281,6 +292,16 @@
         <span class="hint">Prep countdown:</span>
         <input class="fld num" id="prepInput" type="number" min="0" max="60" value="5"><span class="unit hint">sec</span>
       </div>
+    </div>
+
+    <div class="sec">
+      <div class="lab">Appearance</div>
+      <div class="appearance" id="appearanceSeg" role="group" aria-label="Appearance">
+        <button data-surface="system" aria-pressed="true">System</button>
+        <button data-surface="light" aria-pressed="false">Light</button>
+        <button data-surface="dark" aria-pressed="false">Dark</button>
+      </div>
+      <p class="apphint" id="appearanceHint"></p>
     </div>
 
     <div class="sec"><div class="lab">Theme</div><div class="swatches" id="themeRow"></div></div>

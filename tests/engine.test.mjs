@@ -373,3 +373,37 @@ test("sanitize survives a numeric ladder and object stations", () => {
   assert.equal(c.stations.length, 1);
   assert.deepEqual(c.ladder, [[30, 15]]);
 });
+
+// ---------- appearance: light / dark / system ----------
+import { resolveSurface, SURFACES, LIGHT_FIELDS as SHARE_FIELDS } from "../engine.js";
+
+test("sanitize keeps a valid surface and rejects anything else", () => {
+  assert.equal(sanitizeG10({ stations: [{ ex: "A" }], ladder: [[30, 15]], surface: "dark" }).surface, "dark");
+  assert.equal(sanitizeG10({ stations: [{ ex: "A" }], ladder: [[30, 15]], surface: "neon" }).surface, "system");
+  assert.equal(sanitizeG10({ stations: [{ ex: "A" }], ladder: [[30, 15]] }).surface, "system");
+  assert.deepEqual(SURFACES, ["system", "light", "dark"]);
+});
+
+test("resolveSurface follows the OS when the preference is system", () => {
+  assert.equal(resolveSurface({ screen: "home", pref: "system", systemDark: true }), "dark");
+  assert.equal(resolveSurface({ screen: "home", pref: "system", systemDark: false }), "light");
+});
+
+test("resolveSurface lets an explicit preference beat the OS", () => {
+  assert.equal(resolveSurface({ screen: "landing", pref: "light", systemDark: true }), "light");
+  assert.equal(resolveSurface({ screen: "customize", pref: "dark", systemDark: false }), "dark");
+});
+
+test("the live timer is dark whatever the preference says", () => {
+  assert.equal(resolveSurface({ screen: "live", pref: "light", systemDark: false }), "dark");
+  assert.equal(resolveSurface({ screen: "live", pref: "system", systemDark: false }), "dark");
+});
+
+test("resolveSurface falls back to system for a junk preference", () => {
+  assert.equal(resolveSurface({ screen: "home", pref: "chartreuse", systemDark: true }), "dark");
+  assert.equal(resolveSurface({ screen: "home", systemDark: false }), "light");
+});
+
+test("surface is NOT shareable — a link can't change the recipient's theme", () => {
+  assert.equal(SHARE_FIELDS.includes("surface"), false);
+});

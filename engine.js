@@ -85,6 +85,7 @@ export function occupants(block, P, N) {
 let DEFAULTS = {
   people: 2, prep: 5, theme: "Volt", volume: 0.8, targetMin: 0,
   voice: true, ticks: true, halfChime: true, haptics: false, keepAwake: true,
+  surface: "system",
 };
 export function setDefaults(d) { DEFAULTS = { ...DEFAULTS, ...d }; }
 
@@ -105,6 +106,8 @@ export function migrate(c) {
 // 40 stations / 60 ladder intervals are far beyond any real workout.
 const MAX_STATIONS = 40, MAX_LADDER = 60;
 const BOOL_FIELDS = ["voice", "ticks", "haptics", "keepAwake", "halfChime"];
+// Appearance preference. "system" follows prefers-color-scheme; the other two override it.
+export const SURFACES = ["system", "light", "dark"];
 
 export function sanitize(c) {
   // Array.isArray, not `|| []`: a crafted config can carry a STRING here, and "x".slice()
@@ -141,6 +144,7 @@ export function sanitize(c) {
   // Booleans are part of the trust boundary too: a crafted config can carry voice:"yes" (truthy
   // but not a boolean) and a legacy one can omit keepAwake entirely. Coerce, defaulting when absent.
   for (const b of BOOL_FIELDS) c[b] = (c[b] === undefined) ? !!DEFAULTS[b] : !!c[b];
+  c.surface = SURFACES.includes(c.surface) ? c.surface : (DEFAULTS.surface || "system");
   return c;
 }
 
@@ -383,4 +387,14 @@ export function gearOf(config) {
     if (g && !seen.includes(g)) seen.push(g);
   });
   return seen;
+}
+
+// Which surface a screen should paint, given the user's preference and the OS setting.
+// The live timer is ALWAYS dark: it is a display board read across a room, and a white
+// screen at full brightness is glare. Every other screen follows the preference.
+export function resolveSurface({ screen, pref, systemDark }) {
+  if (screen === "live") return "dark";
+  const want = SURFACES.includes(pref) ? pref : "system";
+  if (want === "system") return systemDark ? "dark" : "light";
+  return want;
 }

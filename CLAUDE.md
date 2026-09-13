@@ -49,6 +49,9 @@ cd server && npm run create-admin  # provision a user (there is no self-registra
 - Tests: client `tests/*.test.mjs` (`node:test` + `node:assert/strict`); server `server/tests/`
   (`vitest` + `supertest` + `mongodb-memory-server`). New pure logic gets a test; put logic in
   engine.js (or extract from app.js) to make it testable.
+- **The left nav exists once in index.html** (`#lpNav`) and is cloned into the catalog screen at
+  boot. Nav items are addressed by `data-nav`, never by id, and one delegated listener drives both
+  copies; `paintNav()` marks the current page and refreshes the counts.
 - **Landing CSS is namespaced `lp*`** because the dark app has unscoped rules that would reach into
   it — `button.ghost` (condensed uppercase) and `.count` (the timer's absolutely-positioned
   countdown overlay) both bit during the build. Grep styles.css before reusing a generic class name.
@@ -81,7 +84,8 @@ cd server && npm run create-admin  # provision a user (there is no self-registra
    person-cards/big-circuit display, update `_contentSig` to include the new inputs.
 6. **`engine.js` defaults are injected** via `setDefaults()` from app.js; tests rely on engine's
    built-in fallbacks. Keep both in sync if you add config fields, and add the field to `sanitize`,
-   `migrate`, `LIGHT_FIELDS` (if shareable), and `DEFAULT` in catalog.js.
+   `migrate`, `LIGHT_FIELDS` (if shareable), and `DEFAULT` in catalog.js. `surface` is deliberately
+   **not** in `LIGHT_FIELDS`: a share link must not repaint the recipient's app.
 7. **The server must not trust the client's sanitize.** Anything written through the API is
    re-validated server-side; every collection is scoped by `userId` and every query filters on the
    JWT's user. No cross-user reads.
@@ -113,12 +117,14 @@ already used by app.js — use them rather than re-deriving the logic inline:
   user's password). If sign-in fails in a new environment, check that a user exists before
   suspecting the code.
 - **Welcome screen always shows on normal boot** — deliberate ("no silent auto-login"). Don't "fix" it.
-- **Welcome and landing are the app's light surfaces.** `body.auth-light` is a scoped token
-  override toggled in exactly one place, inside `showScreen()` (`name === "welcome" || name === "landing"`).
-  Never move those tokens into `:root`, and never toggle the class anywhere else — the two states
-  would desync. Dark overlays that can open over a light screen (settings sheet, account menu,
-  confirm dialog) re-declare the dark tokens on themselves; add any new overlay to that list or
-  its text will be dark-on-dark.
+- **Surfaces.** `body.surface-light` / `body.surface-dark` are token sets chosen in exactly one
+  place, `applySurface()` in app.js, from the pure `resolveSurface({screen, pref, systemDark})`.
+  Never toggle those classes anywhere else and never move their tokens into `:root`. Rules:
+  welcome / landing / home / customize follow `config.surface` (`system` | `light` | `dark`, where
+  system reads `prefers-color-scheme`); **the live timer is always dark** and additionally gets
+  `body.on-live`, which restores its original near-black ground, radial wash and film grain.
+  Overlays (settings sheet, account menu, confirm dialog) read the same tokens as the screen behind
+  them — don't give a new overlay its own hardcoded colors.
 - **`prep: 0` creates a 0-duration phase**; `render()` guards a 0/0 NaN for the ring. Preserve that guard.
 - **Settings sheet serves two flows** distinguished only by `sheetFromCustomize`: gear-button →
   edits `config` (Apply = sanitize+persist+rebuild); customize screen → edits the customize `draft`
