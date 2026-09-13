@@ -10,17 +10,17 @@ in PROJECT.md's "Accepted risks".
 ## Commands
 
 ```sh
-npm test                      # client: node --test tests/*.test.mjs   (86 tests, all must pass)
+npm test                      # client: node --test tests/*.test.mjs   (132 tests, all must pass)
 npm run test:watch            # client watch mode
 npm start                     # npx http-server on :8000  (client only, no API)
 
 cd server && npm run dev:local # WHOLE STACK on :4000 — Express + embedded MongoDB, seeds an admin
-cd server && npx vitest run    # server: 32 tests, all must pass
+cd server && npx vitest run    # server: 51 tests, all must pass
 cd server && npm run create-admin  # provision a user (there is no self-registration)
 ```
 
-- **Both suites must be green before any change is claimed done.** Client `npm test` (86) and
-  server `npx vitest run` (32). CI (`.github/workflows/test.yml`) runs both on push and PR.
+- **Both suites must be green before any change is claimed done.** Client `npm test` (132) and
+  server `npx vitest run` (51). CI (`.github/workflows/test.yml`) runs both on push and PR.
 - The **client** is buildless with **zero npm dependencies** — do not add client-side packages.
   The **server** (`server/`) uses Express 5 + Mongoose 8 and has its own `package.json`; deps go
   there. `server/scripts/build-client.mjs` only *copies* client files into `server/public` and
@@ -46,6 +46,13 @@ cd server && npm run create-admin  # provision a user (there is no self-registra
   engine/catalog/store import app.
 - `server/src/` — `routes/ → controllers/ → models/`, with `middleware/auth.js` (`verifyJWT`)
   applied per-route, not router-wide, so it never intercepts siblings like `/api/health`.
+- **Set logs are written immediately and linked afterwards.** A set is saved the moment it is
+  logged (so it survives the tab closing), with no session; when the run ends and its session gets
+  an id, `attachPendingLogs()` PATCHes each log onto it. Never attach a log to `lastSession` — that
+  is the *previous* run.
+- **Discover** (`/api/discover`) proxies one exercise a day from the open wger database **through
+  our server**. The client CSP is `connect-src 'self'` and must stay that way: widening it would
+  hand a third party every user's IP. The route caches for 24h and degrades to hiding the section.
 - **History** is recorded server-side: `WorkoutSession` (one run, with a snapshot of the stations
   and ladder as run) and `SetLog`, behind `/api/sessions`, `/api/logs` and `/api/stats`. A run is
   recorded by `recordRun()` in app.js when it finishes, resets, or you leave the live screen;
@@ -95,7 +102,7 @@ cd server && npm run create-admin  # provision a user (there is no self-registra
 7. **The server must not trust the client's sanitize.** Anything written through the API is
    re-validated server-side; every collection is scoped by `userId` and every query filters on the
    JWT's user. No cross-user reads.
-8. **Run both suites before claiming any change done.** 86 client + 32 server, all green.
+8. **Run both suites before claiming any change done.** 132 client + 51 server, all green.
 
 ## Pure seams to prefer (added 2026-09-12)
 

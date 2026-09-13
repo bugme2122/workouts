@@ -12,6 +12,7 @@ router.delete('/sessions/:id', verifyJWT, asyncHandler(log.removeSession));
 
 router.post('/logs', verifyJWT, asyncHandler(log.createLog));
 router.get('/logs', verifyJWT, asyncHandler(log.listLogs));
+router.patch('/logs/:id', verifyJWT, asyncHandler(log.updateLog));
 router.delete('/logs/:id', verifyJWT, asyncHandler(log.removeLog));
 
 router.get('/stats', verifyJWT, asyncHandler(log.stats));

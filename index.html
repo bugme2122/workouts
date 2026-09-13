@@ -148,6 +148,18 @@
         </div>
         <div class="lpteasers" id="lpTeasers"></div>
       </section>
+
+      <section aria-labelledby="lpDiscH" id="lpDiscoverSec" hidden>
+        <div class="lpsechead"><h2 id="lpDiscH">Swap in something new</h2></div>
+        <div class="lpdiscover">
+          <div>
+            <h3 id="lpDiscName"></h3>
+            <p id="lpDiscText"></p>
+            <p class="src" id="lpDiscSrc"></p>
+          </div>
+          <button class="lpbtn lpghost" id="lpDiscAdd">Add to a workout</button>
+        </div>
+      </section>
     </main>
   </div>
 </section>
@@ -175,6 +187,52 @@
 <!-- ============================ HISTORY ============================
      Everything here is recorded data: sessions written when a run ends, and the set logs
      attached to them. Rendered by renderHistory() in app.js. -->
+<!-- ======================= WORKOUT DETAIL =======================
+     What a workout is, how it runs, and how it has gone for you. Rendered by openWorkout(). -->
+<section id="screen-workout" class="screen">
+  <div class="lp">
+    <div class="lpnavhost" id="wkNavHost"></div>
+    <main class="lpmain">
+      <button class="back" id="wkBack">&lsaquo; Catalog</button>
+      <h1 class="wktitle" id="wkName"></h1>
+      <p class="wklede" id="wkLede"></p>
+
+      <div class="wkfacts" id="wkFacts"></div>
+
+      <div class="wkstrip">
+        <div class="strip lg" id="wkStrip"></div>
+        <div class="stripkey"><span><i></i>work</span><span><i class="r"></i>rest</span><span id="wkStripNote"></span></div>
+      </div>
+
+      <div class="wkyours" id="wkYours" hidden>
+        <div>
+          <h3>Your history with this one</h3>
+          <p id="wkYoursText"></p>
+        </div>
+        <div class="spark" id="wkSpark" aria-hidden="true"></div>
+      </div>
+
+      <div class="wkprose">
+        <h2>What it is</h2>
+        <p id="wkAbout"></p>
+        <h2>How it runs</h2>
+        <p id="wkRuns"></p>
+        <h2>Stations</h2>
+        <div class="wkstations" id="wkStations"></div>
+        <h2>Good for</h2>
+        <p id="wkGoodFor"></p>
+      </div>
+
+      <div class="wkcta">
+        <button class="lpbtn" id="wkStart">Start workout</button>
+        <button class="lpbtn lpghost" id="wkCustomize">Customize</button>
+        <button class="lpbtn lpghost" id="wkShare">Copy shareable link</button>
+      </div>
+      <p class="wkshared" id="wkShareOut" hidden></p>
+    </main>
+  </div>
+</section>
+
 <section id="screen-history" class="screen">
   <div class="lp">
     <div class="lpnavhost" id="histNavHost"></div>
@@ -273,6 +331,21 @@
   </div>
 
   <div class="prog"><i id="progbar"></i></div>
+
+  <div class="setlog" id="setLog">
+    <button class="setlog-open" id="setLogOpen">+ Log a set</button>
+    <div class="setlog-body" id="setLogBody" hidden>
+      <label class="setlog-lab" for="setLogInput">What did you just do?</label>
+      <div class="setlog-row">
+        <input id="setLogInput" class="setlog-input" type="text" autocomplete="off"
+               placeholder="squats 3 sets of 5 at 200 pounds">
+        <button class="setlog-mic" id="setLogMic" hidden aria-label="Dictate">&#127908;</button>
+        <button class="setlog-save" id="setLogSave">Log</button>
+      </div>
+      <p class="setlog-msg" id="setLogMsg"></p>
+      <ul class="setlog-list" id="setLogList"></ul>
+    </div>
+  </div>
 
   <div class="timer" id="tcard">
     <div class="phase" id="phase">Tap to start</div>

@@ -415,3 +415,104 @@ export const MIN_SESSION_SEC = 30;
 export function shouldRecordSession(elapsedSec, completed) {
   return !!completed || elapsedSec >= MIN_SESSION_SEC;
 }
+
+// ---- Voice/text set logging (pure) ----
+// Turns "squats three sets of five at 200 pounds" into a SetLog body. Deliberately conservative:
+// anything it can't read confidently is rejected so the UI can ask rather than store a guess.
+
+const WORD_NUMBERS = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50,
+  sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100,
+};
+const FILLERS = /^(i\s+)?(just\s+)?(did|finished|completed|logged|log|record)\s+/i;
+
+// "two hundred" -> 200, "three" -> 3, "225" -> 225. Returns null when nothing numeric is present.
+function wordsToNumber(text) {
+  const t = String(text).trim().toLowerCase();
+  if (/^\d+(\.\d+)?$/.test(t)) return parseFloat(t);
+  const parts = t.split(/[\s-]+/).filter(w => w in WORD_NUMBERS);
+  if (!parts.length) return null;
+  let total = 0, current = 0;
+  for (const w of parts) {
+    const n = WORD_NUMBERS[w];
+    if (n === 100) current = (current || 1) * 100;
+    else current += n;
+  }
+  total += current;
+  return total;
+}
+
+// Replace spelled-out numbers with digits so one set of regexes handles both forms.
+// The continuation accepts ANY number word (with an optional "and"), so "one hundred eighty"
+// stays one token — matching only units after "hundred" read it as 100 followed by 80.
+const NUM_WORD = "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|" +
+                 "twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|zero";
+const NUM_PHRASE = new RegExp(
+  "\\b((?:" + NUM_WORD + ")(?:[\\s-](?:and[\\s-])?(?:" + NUM_WORD + "))*)\\b", "gi");
+
+function digitize(text) {
+  return text.replace(NUM_PHRASE, (m) => {
+    const n = wordsToNumber(m);
+    return n == null ? m : String(n);
+  });
+}
+
+export function parseSetPhrase(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return { ok: false, error: "Nothing to log — try \"squats 3 sets of 5 at 200 pounds\"." };
+
+  let s = digitize(raw.replace(FILLERS, "")).toLowerCase().replace(/\s+/g, " ").trim();
+
+  let sets = null, reps = null, weight = null, unit = "lb";
+
+  // Bodyweight marker.
+  if (/\b(body\s?weight|bw|no weight|unweighted)\b/.test(s)) { unit = "bw"; weight = 0; }
+  s = s.replace(/\b(body\s?weight|bw|no weight|unweighted)\b/g, " ");
+
+  // Weight + unit: "at 200 pounds", "200 lbs", "100 kg".
+  const wm = s.match(/(?:at\s+|@\s*)?(\d+(?:\.\d+)?)\s*(pounds?|lbs?|kilos?|kilograms?|kgs?)\b/);
+  if (wm) {
+    weight = parseFloat(wm[1]);
+    unit = /^k/.test(wm[2]) ? "kg" : "lb";
+    s = s.replace(wm[0], " ");
+  }
+
+  // "3x5" / "3 x 5" shorthand.
+  const xm = s.match(/(\d+)\s*[x×]\s*(\d+)/);
+  if (xm) { sets = parseInt(xm[1]); reps = parseInt(xm[2]); s = s.replace(xm[0], " "); }
+
+  // "3 sets" / "3 sets of 5" / "5 reps".
+  if (sets == null) {
+    const sm = s.match(/(\d+)\s*(?:sets?)\b(?:\s*(?:of|x)\s*(\d+))?/);
+    if (sm) { sets = parseInt(sm[1]); if (sm[2]) reps = parseInt(sm[2]); s = s.replace(sm[0], " "); }
+  }
+  if (reps == null) {
+    const rm = s.match(/(\d+)\s*(?:reps?|repetitions?)\b/);
+    if (rm) { reps = parseInt(rm[1]); s = s.replace(rm[0], " "); }
+  }
+
+  // A bare trailing number after sets/reps is the weight ("deadlift 3x5 315").
+  if (weight == null) {
+    const bm = s.match(/\b(\d+(?:\.\d+)?)\b/);
+    if (bm && (sets != null || reps != null)) { weight = parseFloat(bm[1]); s = s.replace(bm[0], " "); }
+  }
+
+  // Whatever prose is left is the exercise name.
+  const exercise = s.replace(/\b(of|at|for|and|the|a|an|sets?|reps?|@)\b/g, " ")
+                    .replace(/[^a-z0-9\s'-]/g, " ")
+                    .replace(/\s+/g, " ").trim();
+
+  if (!exercise || /^\d+$/.test(exercise))
+    return { ok: false, error: "I didn't catch the exercise name. Try \"squats 3 sets of 5 at 200 pounds\"." };
+
+  sets = sets == null ? 1 : sets;
+  reps = reps == null ? 0 : reps;
+  weight = weight == null ? 0 : weight;
+
+  if (sets < 1 || sets > 100) return { ok: false, error: "Sets must be between 1 and 100." };
+  if (reps < 0 || reps > 1000) return { ok: false, error: "Reps must be between 0 and 1000." };
+  if (weight < 0 || weight > 10000) return { ok: false, error: "That weight looks wrong." };
+
+  return { ok: true, log: { exercise, sets, reps, weight, unit, note: raw } };
+}

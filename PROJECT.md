@@ -28,7 +28,7 @@ Users can:
 | Vanilla JS ES modules | No framework, no bundler, no client dependencies | Deliberate and still in force **for the client**: it stays buildless, and `server/scripts/build-client.mjs` only copies files and injects `BASE_PATH`. |
 | Express 5 + Mongoose 8 + MongoDB | One service serving both `/api/*` and the app itself | Replaced Firebase in the 2026-07-20 platform migration. Mirrors the FACS deployment model: Railway + MongoDB Atlas behind a Cloudflare route at `flywren-technologies.com/workouts`. See `docs/superpowers/specs/2026-07-20-platform-migration-design.md`. |
 | JWT auth (access + rotating refresh) | Email/password accounts, **admin-provisioned, no self-registration** | Replaced Google popup sign-in. Access token in memory only (XSS mitigation); refresh token in `localStorage` ("Remember me") or `sessionStorage`. See `docs/superpowers/specs/2026-07-20-auth-swap-facs-design.md`. |
-| `node --test` (client) / `vitest` + `supertest` + `mongodb-memory-server` (server) | Two suites, 86 + 32 tests (run on push/PR by `.github/workflows/test.yml`) | Client keeps zero dependencies; the server tests run against an in-memory MongoDB, so no Atlas access is needed to run them. |
+| `node --test` (client) / `vitest` + `supertest` + `mongodb-memory-server` (server) | Two suites, 132 + 51 tests (run on push/PR by `.github/workflows/test.yml`) | Client keeps zero dependencies; the server tests run against an in-memory MongoDB, so no Atlas access is needed to run them. |
 | Google Fonts (Anton, Barlow, Barlow Condensed) | The "sporty poster" typography | The only remaining third-party origin. |
 | `npm run dev:local` (server) | Whole stack on :4000 with an embedded MongoDB | Atlas requires IP allowlisting, which blocks local work; `mongodb-memory-server` against a persistent dbPath avoids it. `npm start` at the root still serves the client alone for pure UI work. |
 
@@ -126,7 +126,11 @@ A returning signed-in user still lands on the welcome screen rather than being s
 
 ### UI structure
 
-Five screens toggled by `showScreen(name)` adding `.active` to `#screen-welcome | -landing | -home | -customize | -live`. **Landing** is the lobby you reach after signing in or choosing guest: a left nav, a hero for whatever workout is loaded now, "My workouts" (saved setups, uploaded regimens, edited catalog workouts, pinned rows — assembled by `buildLibrary()` in catalog.js), and three catalog teasers. **Catalog** shares its shell — the same nav (cloned from one source) and one content column — and its workout cards carry the same interval strip.
+Seven screens toggled by `showScreen(name)` adding `.active` to `#screen-welcome | -landing | -home | -workout | -history | -customize | -live`. **Landing** is the lobby you reach after signing in or choosing guest: a left nav, a hero for whatever workout is loaded now, "My workouts" (saved setups, uploaded regimens, edited catalog workouts, pinned rows — assembled by `buildLibrary()` in catalog.js), and three catalog teasers. **Catalog** shares its shell — the same nav (cloned from one source) and one content column — and its workout cards carry the same interval strip.
+
+**Workout detail** (`#screen-workout`) is the catalog's Details view: facts derived from the config, the interval strip, the prose fields (`about` / `runs` / `goodFor` in catalog.js), the station list with how-to links, and "your history with this one" — run count, finish rate and a sparkline, shown only when there are real runs behind it.
+
+**Set logging** lives on the live screen, collapsed until asked for. `parseSetPhrase()` in engine.js turns "kb swings three sets of fifteen at twenty five pounds" into a log; it is deliberately conservative and refuses what it can't read rather than storing a guess. Dictation uses on-device `SpeechRecognition` where the browser has it — audio never leaves the device, and the parsed result goes only to our own API.
 
 **History** reads only recorded data: `/api/stats` returns weekly buckets (including the empty weeks — a gap is information), a streak, and per-workout rollups; `/api/sessions` pages the runs themselves. A guest sees an honest explanation rather than an empty chart, and their finished runs queue locally until they sign in.
 

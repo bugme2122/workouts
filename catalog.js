@@ -65,12 +65,18 @@ export const WORKOUTS = [
   {
     id: "kb-ladder", name: "Full-Body KB Ladder", category: "Strength · Descending 60→20s",
     blurb: "Six stations, one kettlebell, intervals that shrink as you tire.",
+    about: "A strength-endurance circuit built around one kettlebell and whatever else is in the garage. Each block runs five intervals — 60 seconds on, then 50, 40, 30, 20 — with the rest shrinking alongside the work.",
+    runs: "Everyone rotates one station at the end of a block, so with two people you are always at opposite ends of the circuit and never waiting for the bell. The descending ladder is the point: the work gets shorter exactly as your grip and lungs give out, so the last interval of a block is the one you can still finish honestly.",
+    goodFor: "Two people sharing one bell, 30 minutes, and a floor you don't mind sweating on. Skip it if your grip is already cooked — the swings and the clean & press stack up fast. Solo, drop to one person and the timer announces each station by name.",
     defaultPeople: 2, ladder: LADDERS["Descending"], theme: "Volt", prep: 5, targetMin: 0,
     stations: DEFAULT.stations,
   },
   {
     id: "tabata", name: "Tabata Burner", category: "Cardio · 8× 20/10",
     blurb: "Twenty on, ten off, eight times. As short and as unpleasant as it sounds.",
+    about: "Eight rounds of 20 seconds on and 10 off, per station. Four minutes a station, and the only pacing decision is whether you go hard on round one.",
+    runs: "No rotation and no partner: one station at a time, straight through. The countdown calls the last five seconds of every interval, which is when it starts to matter.",
+    goodFor: "A short, honest cardio hit with no gear and no setup. Not the one to pick if you are learning an exercise — the clock does not wait for form.",
     defaultPeople: 1, ladder: LADDERS["Tabata"], theme: "Ember", prep: 5, targetMin: 0,
     stations: [
       {ex:"Burpees",         gear:"Bodyweight", rep:"Max", url:YT("burpee proper form")},
@@ -82,6 +88,9 @@ export const WORKOUTS = [
   {
     id: "bw-pyramid", name: "Bodyweight Pyramid", category: "No gear · 20→60→20s",
     blurb: "Climbs from 20 seconds to 60 and walks back down. Nothing to carry.",
+    about: "Intervals that climb 20 → 40 → 60 seconds and walk back down again. Nothing to carry and nothing to set up.",
+    runs: "The long interval sits in the middle of each block, so the hardest 60 seconds arrives when you are warm but not yet finished. Rotate a station at the end of each block.",
+    goodFor: "Travel, a crowded gym, or a day when the garage is somebody else's. Works at any number of people — the rotation just spreads you further apart.",
     defaultPeople: 2, ladder: LADDERS["Pyramid"], theme: "Ice", prep: 5, targetMin: 0,
     stations: [
       {ex:"Push-ups",       gear:"Bodyweight", rep:"12–15", url:YT("push up proper form")},
@@ -95,12 +104,18 @@ export const WORKOUTS = [
   {
     id: "partner-circuit", name: "Partner Circuit", category: "Strength · Descending",
     blurb: "The same ladder built for two — you rotate, they rotate, nobody waits for the bell.",
+    about: "The same descending ladder as the KB circuit, set up for two people from the start: you begin at opposite ends of the six stations and rotate together.",
+    runs: "Each block is five intervals; at the end of it the timer calls the rotation out loud so nobody has to watch the screen. With one bell between you, the offset means you are never both at the kettlebell station.",
+    goodFor: "Training with a partner of a different size or strength — you share the clock, not the load. Each station's reps are a suggestion, not a rule.",
     defaultPeople: 2, ladder: LADDERS["Descending"], theme: "Candy", prep: 5, targetMin: 0,
     stations: DEFAULT.stations,
   },
   {
     id: "quick-15", name: "Quick 15", category: "Flat 40/20 · 15 min",
     blurb: "Flat 40/20 on a 15-minute cap, for the days you nearly skipped it.",
+    about: "A flat 40 on, 20 off, capped at 15 minutes. No ladder, no ramp — the same interval every time so you can stop thinking about the clock.",
+    runs: "Four stations, as many blocks as fit in the cap. Because every interval is identical, it is the easiest one to run while half-asleep or talking to someone.",
+    goodFor: "The days you nearly skipped it. Fifteen minutes, one decision, done — and it still shows up in your history as a session you did.",
     defaultPeople: 2, ladder: LADDERS["Flat 40/20"], theme: "Mono", prep: 5, targetMin: 15,
     stations: [
       {ex:"KB Swings",   gear:"25 lb",      rep:"15", url:YT("kettlebell swing form technique")},

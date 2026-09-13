@@ -5,7 +5,7 @@ import {
 import {
   blockLenOf, blocksFor, buildPhases, migrate, sanitize,
   clampPeople, occupants, setDefaults, secondCue, decideBoot, isIdle, advancePhases,
-  summarizeConfig, gearOf, resolveSurface, elapsedSeconds, shouldRecordSession,
+  summarizeConfig, gearOf, resolveSurface, elapsedSeconds, shouldRecordSession, parseSetPhrase,
   validateRegimen, sanitizeRegimen, buildRegimenPhases, REGIMEN_SCHEMA,
   guestAccessLabel,
 } from "./engine.js";
@@ -141,6 +141,7 @@ async function onAuthChange(u){
         if(r.sent) noteSync(true, "session");
       }catch(e){ noteSync(false,"session flush",e); }
       await loadLastSession();
+      loadDiscover();   // optional extra; never awaited into the sync path
     }catch(e){ noteSync(false,"sync",e); /* keep local config on any cloud error */ }
   } else {
     clearTimeout(_cfgSaveT); cloud=null; _syncState="";
@@ -465,7 +466,7 @@ function start(){
   if(finished) reset();
   if(running){ running=false; if(rafId) cancelAnimationFrame(rafId); releaseWake(); render(); return; }
   running=true; last=performance.now(); cueSec=null; acquireWake();
-  if(runStartAt === null){ runStartAt = Date.now(); runRecorded = false; }
+  if(runStartAt === null){ runStartAt = Date.now(); runRecorded = false; sessionLogs = []; pendingLogIds = []; renderSessionLogs(); }
   if(idx===0 && phases[0].type==="prep") say("Get ready");
   render(); rafId=requestAnimationFrame(loop);
 }
@@ -788,12 +789,15 @@ function renderCatalog() {
       '<div class="exmini">' + w.stations.map(s => '<span>' + esc(s.ex) + '</span>').join("") + '</div>' +
       (locked
         ? '<div class="wfoot"><button class="go unlock">Sign in to unlock</button></div>'
-        : '<div class="wfoot"><button class="cust">Customize</button><button class="go">Start</button></div>');
+        : '<div class="wfoot"><button class="cust">Customize</button><button class="det">Details</button><button class="go">Start</button></div>');
     drawStrip(card.querySelector(".strip"), cfg.ladder);
     if (locked) {
       card.querySelector(".unlock").onclick = () => showScreen("welcome");
     } else {
       card.querySelector(".cust").onclick = () => openCustomize(w);
+      card.querySelector(".det").onclick = () => openWorkout(w);
+      card.querySelector(".wname").onclick = () => openWorkout(w);
+      card.querySelector(".wname").style.cursor = "pointer";
       card.querySelector(".go").onclick = () => { config = sanitize(workoutToConfig(w)); persist(); startLive(); };
     }
     stack.appendChild(card);
@@ -915,13 +919,27 @@ function recordRun(completed){
 
   if(cloud){
     cloud.saveSession(session)
-      .then(() => { noteSync(true, "session"); lastSession = session; refreshLandingIfVisible(); })
+      .then(res => {
+        noteSync(true, "session");
+        lastSession = (res && res.session) || session;
+        attachPendingLogs(res && res.id);
+        refreshLandingIfVisible();
+      })
       .catch(e => { noteSync(false, "session save", e); store.local.queueSession(session); });
   } else {
     // Guests and offline runs: keep it until there is somewhere to send it.
     store.local.queueSession(session);
   }
   lastSession = session;
+}
+
+// Point this run's set logs at the session just written for it. Best-effort: a failure leaves
+// the log saved but unattached, which is better than losing it.
+function attachPendingLogs(sessionId){
+  const ids = pendingLogIds;
+  pendingLogIds = [];
+  if(!sessionId || !cloud || !ids.length) return;
+  ids.forEach(id => cloud.attachLog(id, sessionId).catch(e => noteSync(false, "log attach", e)));
 }
 
 // The most recent run, for the landing hero. Read from the cloud on sign-in; falls back to
@@ -974,6 +992,205 @@ function renderAppearance(){
     : "The workout timer stays dark either way — it is easier to read across a room.";
 }
 
+
+
+// ================= WORKOUT DETAIL =================
+// What a workout is, how it runs, and — if there is any — how it has gone for you.
+let wkCurrent = null;
+
+async function openWorkout(w){
+  wkCurrent = w;
+  const cfg = sanitize(workoutToConfig(w));
+  const sum = summarizeConfig(cfg);
+
+  $("wkName").textContent = w.name;
+  $("wkLede").textContent = w.blurb || w.category;
+
+  const gear = gearOf(cfg);
+  $("wkFacts").innerHTML = [
+    ["Length", sum.minutes + " min"],
+    ["People", "1–" + Math.min(6, sum.stations)],
+    ["Stations", String(sum.stations)],
+    ["Ladder", cfg.ladder[0][0] + "→" + cfg.ladder[cfg.ladder.length-1][0] + "s"],
+    ["Gear", gear.length ? gear.slice(0,3).join(" · ") : "None"],
+  ].map(([k,v]) => '<div class="wkfact"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + "</div></div>").join("");
+
+  drawStrip($("wkStrip"), cfg.ladder);
+  $("wkStripNote").textContent = "bar height is seconds on · " + sum.intervals +
+    " intervals per block, " + sum.blocks + " blocks";
+
+  $("wkAbout").textContent = w.about || w.blurb || "";
+  $("wkRuns").textContent = w.runs || "";
+  $("wkGoodFor").textContent = w.goodFor || "";
+
+  $("wkStations").innerHTML = w.stations.map((st,i) =>
+    '<div class="wkstation"><div class="n">' + (i+1) + "</div>" +
+      '<div><div class="ex">' + esc(st.ex) + '</div><div class="sub">' +
+        esc([st.gear, st.rep].filter(Boolean).join(" · ")) + "</div></div>" +
+      '<a href="' + esc(howto(st)) + '" target="_blank" rel="noopener">How to</a></div>').join("");
+
+  $("wkShareOut").hidden = true;
+  showScreen("workout");
+  renderWorkoutHistory(w);        // fills in once the API answers
+}
+
+// "Your history with this one" — real runs only. Hidden entirely when there are none, rather
+// than showing a box that says zero.
+async function renderWorkoutHistory(w){
+  const box = $("wkYours");
+  box.hidden = true;
+  if(!cloud) return;
+  try{
+    const runs = await cloud.listSessions({ workoutId: w.id, limit: 20 });
+    if(!runs.length || wkCurrent !== w) return;
+    const done = runs.filter(r => r.completed).length;
+    const usual = runs[0];
+    $("wkYoursText").innerHTML =
+      "Run <b>" + runs.length + "</b> time" + (runs.length===1?"":"s") +
+      ", <b>" + done + "</b> finished. Last run " + esc(relativeDay(usual.startedAt)) +
+      "; your usual is " + (usual.people===1 ? "solo" : "<b>" + usual.people + "</b> people") +
+      " at <b>" + Math.max(1, Math.round(usual.durationSec/60)) + "</b> min.";
+    // Oldest-left sparkline of the last runs, by minutes.
+    const mins = runs.slice(0, 12).reverse().map(r => Math.max(1, Math.round(r.durationSec/60)));
+    const peak = Math.max(...mins);
+    $("wkSpark").innerHTML = mins.map((m,i) =>
+      '<i class="' + (i===mins.length-1 ? "last" : "") + '" style="height:' +
+      Math.round(100*m/peak) + '%" title="' + m + ' min"></i>').join("");
+    box.hidden = false;
+  }catch(e){ noteSync(false, "workout history", e); }
+}
+
+$("wkBack").onclick = () => showScreen("home");
+$("wkStart").onclick = () => {
+  if(!wkCurrent) return;
+  adoptLadder(); persistRegimen();
+  config = sanitize(workoutToConfig(wkCurrent)); applyTheme(config.theme); persist();
+  build(); setupView(); reset(); showScreen("live"); ensureAudio();
+};
+$("wkCustomize").onclick = () => { if(wkCurrent) openCustomize(wkCurrent); };
+$("wkShare").onclick = () => {
+  if(!wkCurrent) return;
+  const link = location.origin + location.pathname + "#" + encShare(sanitize(workoutToConfig(wkCurrent)));
+  const out = $("wkShareOut");
+  out.textContent = link; out.hidden = false;
+  try{ navigator.clipboard.writeText(link).then(() => {
+    $("wkShare").textContent = "Link copied";
+    setTimeout(() => { $("wkShare").textContent = "Copy shareable link"; }, 1600);
+  }); }catch(e){}
+};
+
+// ================= DISCOVER =================
+// One exercise a day from the open wger database, fetched through our own API so the client
+// CSP stays connect-src 'self'. Entirely optional: if it fails, the section stays hidden.
+let discoverItem = null;
+async function loadDiscover(){
+  if(!cloud || discoverItem) return;
+  try{
+    discoverItem = await cloud.discover();
+    if(activeScreen === "landing") renderDiscover();
+  }catch(e){ /* a missing suggestion is not worth a warning */ }
+}
+function renderDiscover(){
+  const sec = $("lpDiscoverSec");
+  if(!sec) return;
+  if(!discoverItem){ sec.hidden = true; return; }
+  $("lpDiscName").textContent = discoverItem.name;
+  $("lpDiscText").textContent = discoverItem.description;
+  $("lpDiscSrc").textContent = "From the open wger exercise database. Nothing is added to a workout until you add it.";
+  sec.hidden = false;
+}
+$("lpDiscAdd").onclick = () => {
+  if(!discoverItem) return;
+  // Add it as a new station on the end of the current circuit, then open the editor there.
+  adoptLadder();
+  config.stations.push({ ex: discoverItem.name, gear: "", rep: "" });
+  config = sanitize(config);
+  persist(); build(); setupView(); reset();
+  openSettings();
+};
+
+// ================= SET LOGGING =================
+// Log what you actually lifted, typed or spoken. The parser is pure and tested; anything it
+// can't read confidently is refused with a suggestion rather than stored as a guess.
+let sessionLogs = [];
+// Ids of logs written during the run in progress, waiting for that run to get an id.
+let pendingLogIds = [];
+
+function setLogMsg(text, isError){
+  const el = $("setLogMsg");
+  el.textContent = text || "";
+  el.classList.toggle("err", !!isError);
+}
+
+function renderSessionLogs(){
+  $("setLogList").innerHTML = sessionLogs.map(l =>
+    "<li><b>" + esc(l.exercise) + "</b><span>" + l.sets + " × " + l.reps +
+    (l.unit === "bw" ? "" : " @ " + l.weight + " " + esc(l.unit)) + "</span></li>").join("");
+}
+
+async function logSetFromText(text){
+  const parsed = parseSetPhrase(text);
+  if(!parsed.ok){ setLogMsg(parsed.error, true); return; }
+  const log = { ...parsed.log, performedAt: new Date().toISOString(), source: setLogWasSpoken ? "voice" : "manual" };
+  sessionLogs.unshift(log);
+  renderSessionLogs();
+  $("setLogInput").value = "";
+  setLogMsg("Logged " + log.exercise + ".");
+
+  if(!cloud){ setLogMsg("Logged " + log.exercise + " — sign in to keep it."); return; }
+  try{
+    // Saved immediately, with no session attached: a set you just spoke must survive the tab
+    // closing. The run in progress has no id yet, so recordRun() links these up when it ends.
+    const saved = await cloud.saveLog(log);
+    if(saved && saved.id) pendingLogIds.push(saved.id);
+    noteSync(true, "set log");
+  }catch(e){
+    noteSync(false, "set log", e);
+    setLogMsg("Kept on screen — the cloud write failed.", true);
+  }
+}
+
+let setLogWasSpoken = false;
+$("setLogOpen").onclick = () => {
+  const body = $("setLogBody");
+  body.hidden = !body.hidden;
+  $("setLogOpen").textContent = body.hidden ? "+ Log a set" : "Hide set log";
+  if(!body.hidden){ setLogMsg(""); $("setLogInput").focus(); }
+};
+$("setLogSave").onclick = () => { setLogWasSpoken = false; logSetFromText($("setLogInput").value); };
+$("setLogInput").addEventListener("keydown", (ev) => {
+  if(ev.key === "Enter"){ ev.preventDefault(); setLogWasSpoken = false; logSetFromText($("setLogInput").value); }
+});
+
+// Dictation, where the browser has it. On-device: nothing is sent anywhere but our own API.
+{
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const mic = $("setLogMic");
+  if(SR && mic){
+    mic.hidden = false;
+    let rec = null, listening = false;
+    mic.onclick = () => {
+      if(listening && rec){ rec.stop(); return; }
+      try{
+        rec = new SR();
+        rec.lang = navigator.language || "en-US";
+        rec.interimResults = false;
+        rec.maxAlternatives = 1;
+        rec.onresult = (ev) => {
+          const said = ev.results[0][0].transcript;
+          $("setLogInput").value = said;
+          setLogWasSpoken = true;
+          logSetFromText(said);
+        };
+        rec.onerror = () => setLogMsg("Didn't catch that — type it instead.", true);
+        rec.onend = () => { listening = false; mic.classList.remove("on"); };
+        rec.start();
+        listening = true; mic.classList.add("on");
+        setLogMsg("Listening…");
+      }catch(e){ setLogMsg("Dictation isn't available here — type it instead.", true); }
+    };
+  }
+}
 
 // ================= HISTORY =================
 // Everything on this screen is recorded data. Nothing is inferred, and a guest — who has no
@@ -1465,7 +1682,7 @@ function renderLandingTeasers(){
     b.onclick = () => {
       const w = picks[+b.dataset.i];
       if(!authUser && WORKOUTS.indexOf(w) >= GUEST_FREE){ showScreen("welcome"); return; }
-      openCustomize(w);
+      openWorkout(w);
     };
   });
 }
@@ -1497,12 +1714,13 @@ function renderLanding(){
   renderLandingHero();
   renderLandingMine();
   renderLandingTeasers();
+  renderDiscover();
   paintLandingSync();
 }
 
 // Nav. One copy in index.html, cloned into the catalog screen, driven by delegation so both
 // copies behave identically and neither needs unique ids.
-["catNavHost", "histNavHost"].forEach(id => {
+["catNavHost", "histNavHost", "wkNavHost"].forEach(id => {
   const host = $(id), src = $("lpNav");
   if(host && src){
     const copy = src.cloneNode(true);
@@ -1529,7 +1747,8 @@ document.addEventListener("click", (ev) => {
 function paintNav(){
   const page = activeScreen === "home" ? "catalog"
              : activeScreen === "landing" ? "today"
-             : activeScreen === "history" ? "history" : "";
+             : activeScreen === "history" ? "history"
+             : activeScreen === "workout" ? "catalog" : "";
   document.querySelectorAll(".lpnavitem").forEach(b => {
     if(b.dataset.nav === page) b.setAttribute("aria-current", "page");
     else b.removeAttribute("aria-current");
