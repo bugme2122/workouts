@@ -167,3 +167,52 @@ test("mergePins unions both sides without duplicates", () => {
   assert.deepEqual(mergePins(["a"], null), ["a"]);
   assert.deepEqual(mergePins(null, null), []);
 });
+
+// ---------- the offline session queue ----------
+import { flushSessionQueue } from "../store.js";
+
+test("queueSession stores runs that could not be sent, newest last", () => {
+  stubLocalStorage();
+  assert.deepEqual(local.loadQueue(), []);
+  local.queueSession({ name: "A" });
+  local.queueSession({ name: "B" });
+  assert.deepEqual(local.loadQueue().map(s => s.name), ["A", "B"]);
+});
+
+test("the queue is capped so a long offline spell can't fill storage", () => {
+  stubLocalStorage();
+  for (let i = 0; i < 60; i++) local.queueSession({ name: "run" + i });
+  const q = local.loadQueue();
+  assert.equal(q.length, 50);
+  assert.equal(q[q.length - 1].name, "run59");   // the newest survive
+});
+
+test("flushSessionQueue sends every queued run and empties the queue", async () => {
+  stubLocalStorage();
+  local.queueSession({ name: "A" });
+  local.queueSession({ name: "B" });
+  const sent = [];
+  const r = await flushSessionQueue({ saveSession: async s => { sent.push(s.name); } });
+  assert.deepEqual(sent, ["A", "B"]);
+  assert.deepEqual(r, { sent: 2, kept: 0 });
+  assert.deepEqual(local.loadQueue(), []);
+});
+
+test("flushSessionQueue keeps the ones that still fail", async () => {
+  stubLocalStorage();
+  local.queueSession({ name: "good" });
+  local.queueSession({ name: "bad" });
+  const r = await flushSessionQueue({
+    saveSession: async s => { if (s.name === "bad") throw new Error("offline"); },
+  });
+  assert.deepEqual(r, { sent: 1, kept: 1 });
+  assert.deepEqual(local.loadQueue().map(s => s.name), ["bad"]);
+});
+
+test("flushSessionQueue is a no-op with no cloud backend", async () => {
+  stubLocalStorage();
+  local.queueSession({ name: "A" });
+  const r = await flushSessionQueue(null);
+  assert.deepEqual(r, { sent: 0, kept: 1 });
+  assert.deepEqual(local.loadQueue().map(s => s.name), ["A"]);
+});

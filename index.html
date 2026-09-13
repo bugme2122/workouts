@@ -98,6 +98,7 @@
         <button class="lpnavitem" data-nav="today"><i class="tick"></i>Today</button>
         <button class="lpnavitem" data-nav="mine"><i class="tick"></i>My workouts<span class="lpcount" data-count="mine"></span></button>
         <button class="lpnavitem" data-nav="catalog"><i class="tick"></i>Catalog<span class="lpcount" data-count="catalog"></span></button>
+        <button class="lpnavitem" data-nav="history"><i class="tick"></i>History<span class="lpcount" data-count="history"></span></button>
         <div class="lpnavrule"></div>
         <button class="lpnavitem" data-nav="settings"><i class="tick"></i>Settings</button>
         <button class="lpnavitem" data-nav="account"><i class="tick"></i>Account</button>
@@ -167,6 +168,52 @@
         <div class="stack" id="catalogStack"></div>
         <button class="browse" id="buildOwn">+ Build my own from scratch</button>
       </div>
+    </main>
+  </div>
+</section>
+
+<!-- ============================ HISTORY ============================
+     Everything here is recorded data: sessions written when a run ends, and the set logs
+     attached to them. Rendered by renderHistory() in app.js. -->
+<section id="screen-history" class="screen">
+  <div class="lp">
+    <div class="lpnavhost" id="histNavHost"></div>
+    <main class="lpmain">
+      <h1 class="lpgreet">History</h1>
+      <p class="lpsub" id="histSub"></p>
+
+      <section aria-labelledby="histChartH">
+        <div class="lpsechead"><h2 id="histChartH">How much you trained</h2>
+          <div class="lpchips" id="histRange" style="margin:0"></div>
+        </div>
+        <div class="chartwrap">
+          <div class="chart-head">
+            <h3>Minutes per week</h3>
+            <span class="charthint">Hover a bar for that week</span>
+          </div>
+          <div class="chart">
+            <div class="yaxis" id="histY"></div>
+            <div class="plot" id="histPlot"><div class="grid" id="histGrid"></div><div class="bars" id="histBars"></div></div>
+            <div class="xaxis" id="histX"></div>
+          </div>
+          <details class="tablelink">
+            <summary>Show the numbers</summary>
+            <table id="histTable"><thead><tr><th>Week of</th><th>Sessions</th><th>Minutes</th></tr></thead><tbody></tbody></table>
+          </details>
+        </div>
+      </section>
+
+      <section aria-labelledby="histSessH">
+        <div class="lpsechead"><h2 id="histSessH">Every session</h2></div>
+        <div class="lpchips" id="histFilters" role="group" aria-label="Filter sessions"></div>
+        <div id="histSessions"></div>
+        <button class="lpmore" id="histMore" hidden style="margin-top:14px">Load older sessions</button>
+      </section>
+
+      <section aria-labelledby="histTopH">
+        <div class="lpsechead"><h2 id="histTopH">What you run most</h2></div>
+        <div class="lprows" id="histTop"></div>
+      </section>
     </main>
   </div>
 </section>

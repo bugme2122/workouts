@@ -398,3 +398,20 @@ export function resolveSurface({ screen, pref, systemDark }) {
   if (want === "system") return systemDark ? "dark" : "light";
   return want;
 }
+
+// How far into a workout the clock is, in seconds. The same arithmetic drives the elapsed
+// readout, the progress bar and the duration written to a session record, so it lives here
+// once instead of three times in app.js.
+export function elapsedSeconds({ cum, idx, phase, remainingMs, finished, total }) {
+  if (finished) return total;
+  const base = (cum && cum[idx]) || 0;
+  const inPhase = (!phase || phase.type === "prep") ? 0 : (phase.dur - remainingMs / 1000);
+  return Math.max(0, Math.min(total, base + inPhase));
+}
+
+// A run is only worth recording once it has actually happened. Below this a tap on Start
+// followed by a change of mind would litter History with 4-second "workouts".
+export const MIN_SESSION_SEC = 30;
+export function shouldRecordSession(elapsedSec, completed) {
+  return !!completed || elapsedSec >= MIN_SESSION_SEC;
+}
