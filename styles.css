@@ -179,21 +179,74 @@
    Scoped token override, toggled by showScreen() in app.js. The welcome
    screen is the only light surface in the app; everything else keeps the
    dark :root values. Do not move these into :root. ---- */
-body.auth-light{
+/* ===========================================================================
+   SURFACES. Two palettes for the same design: body.surface-light and
+   body.surface-dark, chosen per screen in applySurface() (app.js) from the
+   user's `surface` preference and prefers-color-scheme. The live timer is
+   always dark — it is read across a garage.
+
+   The dark palette here is derived FROM the light one (same roles, same
+   structure, hue-biased neutrals), not from the app's original near-black
+   chrome. That original still lives in :root and still dresses the timer.
+
+   Data marks (the interval strip) are steel/rust in both, re-stepped for the
+   ground: measured ΔE 25.2 protan on white, 22.8 on the dark ground.
+   =========================================================================== */
+body.surface-light{
   --bg:#ffffff;
   --ink:#101322;
   --dim:#6b7280;
   --line:#e3e5ea;
+  --line-soft:#eef0f2;
   --panel:#ffffff;
   --panel2:#f6f7f9;
+  --board:#f5f6f4;
   --auth-cta:#101322;
   --auth-cta-ink:#ffffff;
   --auth-focus:#6f9b16;
+  --work-mark:#1565c0;
+  --work-soft:#5b9ae0;
+  --rest-mark:#c2410c;
+  --shadow:0 1px 2px rgba(16,19,34,.04);
   background:#ffffff;
   color:var(--ink);
 }
+
+body.surface-dark{
+  --bg:#0f1115;
+  --ink:#eef0f4;
+  --dim:#9aa1ad;
+  --line:#272c37;
+  --line-soft:#1e232d;
+  --panel:#161922;
+  --panel2:#1b1f29;
+  --board:#14171f;
+  --auth-cta:#eef0f4;
+  --auth-cta-ink:#0f1115;
+  --auth-focus:#9fd14a;
+  --work-mark:#4a8fd8;
+  --work-soft:#356ea8;
+  --rest-mark:#e06a35;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+  background:var(--bg);
+  color:var(--ink);
+}
 /* Kill the dark page gradient and the film-grain overlay. */
-body.auth-light::after{ display:none; }
+body.surface-light::after,
+body.surface-dark::after{ display:none; }
+
+/* The live timer's own ground: the app's original near-black, its radial wash and its film
+   grain. Set on the body because the page background shows around the screen content. */
+body.on-live{
+  --bg:#0b0c0e;
+  --panel:#15171c;
+  --panel2:#1d2026;
+  --ink:#f5f4ee;
+  --dim:#7d828c;
+  --line:#2a2e36;
+  background:radial-gradient(120% 80% at 50% -10%, #181b21 0%, var(--bg) 55%), var(--bg);
+}
+body.on-live::after{ display:block; }
 
 /* ---- Welcome / sign-in composition ------------------------------------
    Centered narrow column on plain white, no card chrome — the panel and
@@ -429,7 +482,7 @@ body.auth-light::after{ display:none; }
 
 /* ===========================================================================
    LANDING (screen-landing) — the lobby between sign-in and the catalog.
-   Runs on the light surface: body.auth-light already redefines --bg/--ink/--line
+   Runs on the light surface: body.surface-light already redefines --bg/--ink/--line
    etc., so everything below reads from those tokens and needs no second palette.
 
    DATA COLOR. The interval strip's work/rest marks are steel and rust, NOT the
@@ -438,13 +491,7 @@ body.auth-light::after{ display:none; }
    Steel/rust measure ΔE 25.2. Brand lime stays on the mark and the dark timer,
    where nothing has to be told apart from it.
    ========================================================================= */
-body.auth-light{
-  --work-mark:#1565c0;
-  --work-soft:#5b9ae0;
-  --rest-mark:#c2410c;
-  --board:#f5f6f4;
-  --line-soft:#eef0f2;
-}
+
 
 .lp{ width:100%; max-width:1180px; margin:0 auto; display:grid;
   grid-template-columns:210px minmax(0,1fr); gap:38px; align-items:start; min-width:0; }
@@ -586,17 +633,132 @@ body.auth-light{
 @keyframes striprise{ from{ transform:scaleY(.2); transform-origin:bottom; } to{ transform:scaleY(1); } }
 
 /* ---------------------------------------------------------------------------
-   Dark overlays on a light surface. The settings sheet and the account menu paint
-   their own dark chrome, but their TEXT reads var(--ink)/var(--dim) — which
-   body.auth-light has redefined to near-black. Opened from the welcome screen or
-   the landing lobby they were dark-on-dark and unreadable (the same failure the
-   sign-out path used to hit). Re-declare the dark tokens on the overlay itself, so
-   the two states can't desync: the surface and its text come from one set.
+   Overlays (settings sheet, account menu, confirm dialog) follow the surface —
+   they read the same tokens as the screen behind them. Over the live timer the
+   body is already surface-dark, so they come out dark there without a special
+   case. (They used to force their own near-black, which was correct when the
+   app had exactly one dark world and is wrong now.)
    --------------------------------------------------------------------------- */
-body.auth-light #sheet .sheetcard,
-body.auth-light .acctmenu,
-body.auth-light .confirmcard{
-  --bg:#0b0c0e; --panel:#15171c; --panel2:#1d2026;
-  --ink:#f5f4ee; --dim:#7d828c; --line:#2a2e36;
-  color:var(--ink);
-}
+
+/* ===========================================================================
+   CATALOG (#screen-home) — the same shell as the landing lobby: left nav plus
+   one content column, on whichever surface is active. The workout card carries
+   the interval strip, so the catalog and the lobby describe a workout the same
+   way.
+   =========================================================================== */
+#screen-home .home{ background:none; border:0; border-radius:0; padding:0; box-shadow:none;
+  width:100%; max-width:1180px; margin:0 auto; display:block; }
+#screen-home .hrow{ display:none; }            /* the nav replaces the old header row */
+
+.cathead{ display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:4px; }
+.cathead h1{ margin:0; font-family:'Barlow',sans-serif; font-size:28px; font-weight:600;
+  letter-spacing:-.015em; color:var(--ink); }
+.cathead p{ margin:6px 0 0; color:var(--dim); font-size:14.5px; }
+
+.stack{ display:flex; flex-direction:column; gap:12px; margin-top:20px; }
+
+.wcard{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+  box-shadow:var(--shadow); display:grid; gap:12px; }
+.wcard.locked{ opacity:1; }
+.wcard .wtop{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.wcard .wname{ font-family:'Barlow',sans-serif; font-weight:600; font-size:18px; text-transform:none;
+  letter-spacing:-.01em; line-height:1.2; color:var(--ink); }
+.wcard .wtag{ font-family:'Barlow',sans-serif; font-weight:400; font-size:13.5px; letter-spacing:0;
+  text-transform:none; color:var(--dim); margin-top:3px; max-width:60ch; }
+.wcard .wdur{ font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:14px;
+  color:var(--dim); background:none; border:1px solid var(--line); border-radius:999px;
+  padding:3px 11px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.wcard .lock{ font-size:13px; opacity:.9; }
+.wcard .wstrip{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.wcard .wstrip .strip{ flex:1 1 200px; min-width:160px; }
+.wcard .wstrip .wmeta{ color:var(--dim); font-size:13px; font-variant-numeric:tabular-nums; }
+.exmini{ display:flex; flex-wrap:wrap; gap:0; margin:0; color:var(--dim); font-size:13.5px; }
+.exmini span{ font-family:'Barlow',sans-serif; font-weight:400; font-size:13.5px; letter-spacing:0;
+  text-transform:none; background:none; border:0; padding:0; color:var(--dim); }
+.exmini span + span::before{ content:" · "; color:var(--line); }
+.wfoot{ display:flex; gap:9px; margin:0; }
+.wfoot button{ font-family:'Barlow',sans-serif; font-weight:600; letter-spacing:0; text-transform:none;
+  font-size:14.5px; border-radius:999px; padding:9px 18px; cursor:pointer; border:1px solid var(--line); }
+.wfoot .cust{ flex:0 0 auto; background:transparent; color:var(--ink); }
+.wfoot .cust:hover{ border-color:var(--dim); }
+.wfoot .go{ flex:0 0 auto; background:var(--ink); color:var(--bg); border-color:var(--ink); }
+.wfoot .go:hover{ opacity:.88; }
+.wfoot .go.unlock{ background:transparent; color:var(--ink); border-color:var(--line); flex:0 0 auto; }
+.browse{ font-family:'Barlow',sans-serif; font-weight:600; letter-spacing:0; text-transform:none;
+  font-size:14.5px; color:var(--dim); background:transparent; border:1px dashed var(--line);
+  border-radius:14px; padding:14px; margin-top:14px; width:100%; cursor:pointer; }
+.browse:hover{ color:var(--ink); border-color:var(--dim); }
+
+/* ===========================================================================
+   CUSTOMIZE (#screen-customize) — same surface, same type. Structure is
+   unchanged; only the hardcoded near-black chrome becomes tokens.
+   =========================================================================== */
+#screen-customize .cz{ background:var(--panel); border:1px solid var(--line); box-shadow:var(--shadow);
+  max-width:520px; }
+#screen-customize .top{ background:var(--panel); border-bottom:1px solid var(--line); }
+#screen-customize .back{ font-family:'Barlow',sans-serif; font-weight:600; font-size:14px;
+  text-transform:none; letter-spacing:0; color:var(--dim); }
+#screen-customize .back:hover{ color:var(--ink); }
+#screen-customize .ttl{ font-family:'Barlow',sans-serif; font-weight:600; font-size:19px;
+  text-transform:none; letter-spacing:-.01em; }
+#screen-customize .lab{ font-family:'Barlow',sans-serif; font-weight:600; font-size:14px;
+  text-transform:none; letter-spacing:0; color:var(--ink); margin-bottom:8px; }
+#screen-customize .nhint,#screen-customize .hint{ color:var(--dim); }
+#screen-customize .pp{ font-family:'Barlow Condensed',sans-serif; font-size:20px; }
+#screen-customize .row{ background:var(--panel2); border-color:var(--line); }
+
+/* ===========================================================================
+   The settings sheet and the dark overlays follow the surface too, instead of
+   forcing their own near-black. Opened over the live timer the body is already
+   dark, so this reads correctly in every combination.
+   =========================================================================== */
+.sheetcard{ background:var(--panel)!important; }
+body.surface-light .sheetcard,
+body.surface-light .acctmenu,
+body.surface-light .confirmcard{ box-shadow:0 24px 60px -28px rgba(16,19,34,.45); }
+body.surface-light .acctmenu{ background:var(--panel); }
+body.surface-light .confirmcard{ background:var(--panel); }
+body.surface-dark .acctmenu,
+body.surface-dark .confirmcard{ background:var(--panel); }
+
+/* Appearance control in the settings sheet. */
+.appearance{ display:flex; gap:7px; flex-wrap:wrap; }
+.appearance button{ font-family:'Barlow',sans-serif; font-weight:600; font-size:13.5px;
+  text-transform:none; letter-spacing:0; border:1px solid var(--line); background:var(--panel2);
+  color:var(--dim); border-radius:999px; padding:7px 15px; cursor:pointer; }
+.appearance button[aria-pressed="true"]{ border-color:var(--ink); color:var(--ink); background:var(--panel); }
+.appearance button:hover{ color:var(--ink); }
+.apphint{ color:var(--dim); font-size:12.5px; margin-top:8px; }
+
+/* Customize, continued: the pieces that still spoke the dark app's condensed-uppercase
+   dialect, and the one hardcoded near-black (the sticky Go bar) that sat on a white page. */
+#screen-customize .sechead .nm{ font-family:'Barlow',sans-serif; font-weight:600; font-size:15px;
+  text-transform:none; letter-spacing:0; color:var(--ink); }
+#screen-customize .sechead .v{ font-family:'Barlow',sans-serif; font-weight:400; font-size:13.5px;
+  text-transform:none; letter-spacing:0; color:var(--dim); }
+#screen-customize .chips button{ font-family:'Barlow',sans-serif; font-weight:500; font-size:13.5px;
+  text-transform:none; letter-spacing:0; border-radius:999px; padding:6px 13px; }
+#screen-customize .chips button.on{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+#screen-customize .nhint{ font-size:12.5px; line-height:1.45; }
+#screen-customize .gobar{ background:var(--panel); border-top:1px solid var(--line); }
+#screen-customize .go{ font-family:'Barlow',sans-serif; font-weight:600; font-size:16px;
+  text-transform:none; letter-spacing:0; border-radius:999px; background:var(--ink); color:var(--bg); }
+
+/* Sheet typography, brought into the same voice as the rest of the app: sentence case
+   Barlow instead of the tracked-out condensed caps the dark-only era used. The sheet opens
+   over both surfaces, so it reads from tokens only. */
+.sheetcard{ border-color:var(--line); }
+.shead h2{ font-family:'Barlow',sans-serif; font-weight:600; font-size:20px; letter-spacing:-.01em;
+  text-transform:none; color:var(--ink); }
+#sheet .lab{ font-family:'Barlow',sans-serif; font-weight:600; font-size:14px; letter-spacing:0;
+  text-transform:none; color:var(--ink); }
+#sheet .hint{ font-family:'Barlow',sans-serif; font-size:12.5px; color:var(--dim); }
+#sheet .seg button{ font-family:'Barlow',sans-serif; font-weight:500; font-size:13.5px; letter-spacing:0;
+  text-transform:none; border-radius:999px; padding:6px 14px; }
+#sheet .seg button.sel{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+#sheet .ghost,#sheet button.ghost{ font-family:'Barlow',sans-serif; font-weight:600; font-size:14px;
+  letter-spacing:0; text-transform:none; border-radius:999px; color:var(--ink); }
+#sheet button.main{ font-family:'Barlow',sans-serif; font-weight:600; font-size:15px; letter-spacing:0;
+  text-transform:none; border-radius:999px; background:var(--ink); color:var(--bg); }
+#sheet .presetrow .pn{ font-family:'Barlow',sans-serif; font-weight:500; text-transform:none; letter-spacing:0; }
+#sheet .fld{ font-family:'Barlow',sans-serif; }

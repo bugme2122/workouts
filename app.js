@@ -5,7 +5,7 @@ import {
 import {
   blockLenOf, blocksFor, buildPhases, migrate, sanitize,
   clampPeople, occupants, setDefaults, secondCue, decideBoot, isIdle, advancePhases,
-  summarizeConfig, gearOf,
+  summarizeConfig, gearOf, resolveSurface,
   validateRegimen, sanitizeRegimen, buildRegimenPhases, REGIMEN_SCHEMA,
   guestAccessLabel,
 } from "./engine.js";
@@ -14,7 +14,7 @@ import * as auth from "./auth.js";
 
 // Engine fallbacks come from the catalog's DEFAULT so the two can't drift (GAPS #10 -- a missing
 // keepAwake used to read as undefined and let the screen sleep mid-workout).
-setDefaults({ people: DEFAULT.people, prep: DEFAULT.prep, theme: DEFAULT.theme, volume: DEFAULT.volume, targetMin: DEFAULT.targetMin, voice: DEFAULT.voice, ticks: DEFAULT.ticks, halfChime: DEFAULT.halfChime, haptics: DEFAULT.haptics, keepAwake: DEFAULT.keepAwake });
+setDefaults({ people: DEFAULT.people, prep: DEFAULT.prep, theme: DEFAULT.theme, volume: DEFAULT.volume, targetMin: DEFAULT.targetMin, voice: DEFAULT.voice, ticks: DEFAULT.ticks, halfChime: DEFAULT.halfChime, haptics: DEFAULT.haptics, keepAwake: DEFAULT.keepAwake, surface: DEFAULT.surface });
 
 const $ = id => document.getElementById(id);
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -504,7 +504,7 @@ function fillSettings(){
   $("prepInput").value=draft.prep;
   $("volInput").value=Math.round(draft.volume*100);
   document.querySelectorAll(".sw-toggle").forEach(t=>{ t.classList.toggle("on", !!draft[t.dataset.tog]); });
-  renderThemes(); renderLengthSeg(); renderLadderSeg(); renderStationRows(); renderLadderRows(); renderPresets(); updateLenHint();
+  renderThemes(); renderAppearance(); renderLengthSeg(); renderLadderSeg(); renderStationRows(); renderLadderRows(); renderPresets(); updateLenHint();
   byowClearError(); renderByowActive();
   $("linkOut").classList.remove("show");
 }
@@ -589,12 +589,29 @@ function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,
 
 // settings events
 document.querySelectorAll(".gearbtn").forEach(b=>{ b.onclick=openSettings; });
-$("closeS").onclick=()=>{ if(sheetFromCustomize){ closeSettings(); applyTheme(draft.theme); } else { applyTheme(config.theme); closeSettings(); } };
+$("closeS").onclick=()=>{
+  if(sheetFromCustomize){ closeSettings(); applyTheme(draft.theme); }
+  else { applyTheme(config.theme); closeSettings(); }
+  applySurface();   // drop any appearance preview that was not applied
+};
 $("addStation").onclick=()=>{ draft.stations.push({ex:"New exercise",gear:"",rep:""}); renderStationRows(); };
 $("addInterval").onclick=()=>{ const lastp=draft.ladder[draft.ladder.length-1]||[30,15]; draft.ladder.push([lastp[0],lastp[1]]); renderLadderRows(); };
 $("prepInput").oninput=e=>draft.prep=parseInt(e.target.value)||0;
 $("volInput").oninput=e=>draft.volume=(parseInt(e.target.value)||0)/100;
 document.querySelectorAll(".sw-toggle").forEach(t=>{ t.onclick=()=>{ draft[t.dataset.tog]=!draft[t.dataset.tog]; t.classList.toggle("on",draft[t.dataset.tog]); }; });
+{
+  const seg = $("appearanceSeg");
+  if(seg) seg.querySelectorAll("button").forEach(b => {
+    b.onclick = () => {
+      if(draft) draft.surface = b.dataset.surface;
+      // Preview it live: appearance is the one setting you judge by looking at it. Apply also
+      // writes it to `config` on the non-customize path; until then this is preview only.
+      const keep = config.surface; config.surface = b.dataset.surface;
+      applySurface(); config.surface = keep;
+      renderAppearance();
+    };
+  });
+}
 $("savePreset").onclick=()=>{ const nm=($("presetName").value||"").trim(); if(!nm) return;
   // Guard the reserved namespace so a ladder preset can never shadow the regimen bucket.
   if(nm===store.REGIMEN_NS){ return; }
@@ -708,10 +725,14 @@ $("applyBtn").onclick=()=>{
     draft.people=clampPeople(draft.people, draft.stations.length);
     draft.personNames=draft.personNames.slice(0, draft.people);
     applyTheme(draft.theme);
-    closeSettings();
+    // Appearance is a device/account preference, not part of the workout being customized:
+    // it takes effect immediately from either flow.
+    config.surface = draft.surface; store.local.saveConfig(config); cloudSaveConfig(config);
+    closeSettings(); applySurface();
     renderPeoplePicker(); renderNameList(); renderCustLen(); renderCustomizeSummaries();
   } else {
     config=sanitize(clone(draft)); applyTheme(config.theme); persist(); build(); setupView(); reset(); closeSettings();
+    applySurface(); refreshLandingIfVisible();
   }
 };
 
@@ -720,13 +741,8 @@ function showScreen(name) {
   activeScreen = name;
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + name).classList.add("active");
-  // Welcome and the landing lobby are the app's light surfaces (see body.auth-light in
-  // styles.css). Toggled here, in exactly one place, so it can never desync from the
-  // visible screen. The timer and the catalog stay dark.
-  const light = name === "welcome" || name === "landing";
-  document.body.classList.toggle("auth-light", light);
-  const tc = document.querySelector('meta[name="theme-color"]');
-  if (tc) tc.setAttribute("content", light ? "#ffffff" : "#0b0c0e");
+  applySurface();
+  paintNav();
 }
 
 // Guests can use the first N workouts; the rest show a sign-in nudge.
@@ -750,15 +766,20 @@ function renderCatalog() {
     const locked = !signedIn && i >= GUEST_FREE;
     const card = document.createElement("div");
     card.className = "wcard" + (locked ? " locked" : "");
-    const mins = estimateMinutes(workoutToConfig(w));
+    const cfg = sanitize(workoutToConfig(w));
+    const sum = summarizeConfig(cfg);
     card.innerHTML =
       '<div class="wtop"><div><div class="wname">' + esc(w.name) + (locked ? ' <span class="lock">🔒</span>' : '') + '</div>' +
-      '<div class="wtag">' + esc(w.category) + '</div></div>' +
-      '<div class="wdur">~' + mins + ' min</div></div>' +
+      '<div class="wtag">' + esc(w.blurb || w.category) + '</div></div>' +
+      '<div class="wdur">' + sum.minutes + ' min</div></div>' +
+      '<div class="wstrip"><div class="strip sm"></div><div class="wmeta">' +
+        sum.stations + ' stations · ' + sum.intervals + ' intervals · ' +
+        (sum.people === 1 ? 'solo' : sum.people + ' people') + '</div></div>' +
       '<div class="exmini">' + w.stations.map(s => '<span>' + esc(s.ex) + '</span>').join("") + '</div>' +
       (locked
         ? '<div class="wfoot"><button class="go unlock">Sign in to unlock</button></div>'
-        : '<div class="wfoot"><button class="cust">Customize</button><button class="go">Start ▸</button></div>');
+        : '<div class="wfoot"><button class="cust">Customize</button><button class="go">Start</button></div>');
+    drawStrip(card.querySelector(".strip"), cfg.ladder);
     if (locked) {
       card.querySelector(".unlock").onclick = () => showScreen("welcome");
     } else {
@@ -839,6 +860,46 @@ $("custEditStations").onclick = openCustomizeEditor;
 $("custEditTheme").onclick = openCustomizeEditor;
 $("buildOwn").onclick = () => { if(!authUser){ showScreen("welcome"); return; } openCustomize(null); };
 
+
+
+// ================= APPEARANCE =================
+// One place decides which surface every screen paints (the rule itself is pure and tested:
+// engine.resolveSurface). The live timer is always dark; everything else follows
+// config.surface, which may defer to the OS.
+const darkQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+function applySurface(){
+  const mode = resolveSurface({
+    screen: activeScreen,
+    pref: config.surface,
+    systemDark: !!(darkQuery && darkQuery.matches),
+  });
+  const light = mode === "light";
+  document.body.classList.toggle("surface-light", light);
+  document.body.classList.toggle("surface-dark", !light);
+  // The timer keeps its own ground — the original near-black with the radial wash and film
+  // grain. It is the one screen whose look predates the surfaces and should not be flattened
+  // into them.
+  document.body.classList.toggle("on-live", activeScreen === "live");
+  const tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) tc.setAttribute("content", light ? "#ffffff" : "#0f1115");
+}
+
+// A change to the OS setting only matters while the preference is "system".
+if(darkQuery && darkQuery.addEventListener){
+  darkQuery.addEventListener("change", () => { if(config.surface === "system") applySurface(); });
+}
+
+function renderAppearance(){
+  const seg = $("appearanceSeg"); if(!seg) return;
+  // The sheet edits `draft`, so the control reflects the draft, not the live config.
+  const cur = (draft && draft.surface) || config.surface || "system";
+  seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.surface === cur)));
+  const hint = $("appearanceHint");
+  if(hint) hint.textContent = cur === "system"
+    ? "Follows your device. The workout timer stays dark either way."
+    : "The workout timer stays dark either way — it is easier to read across a room.";
+}
 
 // ================= LANDING (the lobby) =================
 // Everything here renders from what the app already stores: the active config, saved ladder
@@ -930,7 +991,7 @@ function renderLandingMine(){
     edited: rows.filter(r => r.origin==="edited").length,
   };
   const LABELS = { all:"All", pinned:"Pinned", saved:"Saved setups", uploaded:"Uploaded", edited:"Edited by me" };
-  const nav = $("navMineCount"); if(nav) nav.textContent = counts.all ? String(counts.all) : "";
+  paintNav();
 
   // Only offer a filter that would return something, so a chip never leads to an empty list.
   const keys = counts.all ? ["all","pinned","saved","uploaded","edited"].filter(k => k==="all" || counts[k]) : [];
@@ -1008,7 +1069,7 @@ function renderLandingTeasers(){
   const signedIn = !!authUser;
   // Three that are not already the loaded workout, so the lobby never suggests what you have open.
   const picks = WORKOUTS.filter(w => w.id !== config.workoutId).slice(0, 3);
-  const nav = $("navCatCount"); if(nav) nav.textContent = String(WORKOUTS.length);
+
   $("lpTeasers").innerHTML = picks.map((w,i) => {
     const locked = !signedIn && WORKOUTS.indexOf(w) >= GUEST_FREE;
     const sum = summarizeConfig(sanitize(workoutToConfig(w)));
@@ -1061,12 +1122,42 @@ function renderLanding(){
   paintLandingSync();
 }
 
-// Nav. "Today" is the page you are on; the rest go where their names say.
-$("navToday").onclick = () => { window.scrollTo({top:0, behavior:"instant"}); };
-$("navMine").onclick = () => { document.getElementById("lpMineH").scrollIntoView({block:"start"}); };
-$("navCatalog").onclick = () => showScreen("home");
-$("navSounds").onclick = () => openSettings();
-$("navAccount").onclick = () => { authUser ? openAcctMenu() : showScreen("welcome"); };
+// Nav. One copy in index.html, cloned into the catalog screen, driven by delegation so both
+// copies behave identically and neither needs unique ids.
+{
+  const host = $("catNavHost");
+  const src = $("lpNav");
+  if(host && src){
+    const copy = src.cloneNode(true);
+    copy.removeAttribute("id");
+    host.appendChild(copy);
+  }
+}
+document.addEventListener("click", (ev) => {
+  const item = ev.target.closest && ev.target.closest(".lpnavitem");
+  if(!item) return;
+  switch(item.dataset.nav){
+    case "today":    goLanding(); break;
+    case "mine":     if(activeScreen==="landing"){ $("lpMineH").scrollIntoView({block:"start"}); }
+                     else { goLanding(); setTimeout(()=>$("lpMineH").scrollIntoView({block:"start"}), 0); }
+                     break;
+    case "catalog":  showScreen("home"); break;
+    case "settings": openSettings(); break;
+    case "account":  authUser ? openAcctMenu(ev) : showScreen("welcome"); break;
+  }
+});
+
+// Mark the current page in every nav copy, and keep the counts in step.
+function paintNav(){
+  const page = activeScreen === "home" ? "catalog" : activeScreen === "landing" ? "today" : "";
+  document.querySelectorAll(".lpnavitem").forEach(b => {
+    if(b.dataset.nav === page) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
+  const mine = buildLibrary({ presets: getPresets(), regimens: getRegimenPresets(), pins: getPins() }).length;
+  document.querySelectorAll('[data-count="mine"]').forEach(e => { e.textContent = mine ? String(mine) : ""; });
+  document.querySelectorAll('[data-count="catalog"]').forEach(e => { e.textContent = String(WORKOUTS.length); });
+}
 $("lpAllWorkouts").onclick = () => showScreen("home");
 $("homeBack").onclick = () => goLanding();
 // Leaving a live workout pauses it rather than letting cues fire from a screen you can't see.

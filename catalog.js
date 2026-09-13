@@ -56,6 +56,7 @@ export const DEFAULT = {
   ],
   personNames: [],
   theme: "Volt", voice: true, ticks: true, haptics: false, keepAwake: true, volume: 0.8, halfChime: true,
+  surface: "system",
   targetMin: 0, workoutId: "kb-ladder",
 };
 
