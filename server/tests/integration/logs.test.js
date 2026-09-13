@@ -208,3 +208,69 @@ describe.skipIf(!dbReady)('sessions, set logs and stats', () => {
     expect((await request(app).delete('/api/logs/not-an-id').set(auth)).status).toBe(404);
   });
 });
+
+describe.skipIf(!dbReady)('discover and per-workout history', () => {
+  it('filters sessions by workoutId for "your history with this one"', async () => {
+    const auth = await login('filter@x.com');
+    await request(app).post('/api/sessions').set(auth).send({ session: aSession() });
+    await request(app).post('/api/sessions').set(auth)
+      .send({ session: aSession({ name: 'Tabata Burner', workoutId: 'tabata' }) });
+
+    const only = await request(app).get('/api/sessions?workoutId=tabata').set(auth);
+    expect(only.body.sessions).toHaveLength(1);
+    expect(only.body.sessions[0].workoutId).toBe('tabata');
+  });
+
+  it('serves the cached exercise of the day without calling upstream', async () => {
+    const auth = await login('disc@x.com');
+    const { __setDiscoverCache } = await import('../../src/controllers/discover.controller.js');
+    __setDiscoverCache({ name: 'Kettlebell Windmill', description: 'Hinge at the hip with the bell overhead.' });
+
+    const res = await request(app).get('/api/discover').set(auth);
+    expect(res.status).toBe(200);
+    expect(res.body.exercise.name).toBe('Kettlebell Windmill');
+    expect(res.body.cached).toBe(true);
+  });
+
+  it('requires auth for discover', async () => {
+    expect((await request(app).get('/api/discover')).status).toBe(401);
+  });
+});
+
+describe.skipIf(!dbReady)('linking a log to the session it happened in', () => {
+  it('attaches a saved log to a session after the fact', async () => {
+    const auth = await login('attach@x.com');
+    const log = await request(app).post('/api/logs').set(auth)
+      .send({ log: { exercise: 'KB Swings', sets: 3, reps: 15, weight: 25 } });
+    expect(log.body.log.sessionId).toBeNull();
+
+    const s = await request(app).post('/api/sessions').set(auth).send({ session: aSession() });
+    const patched = await request(app).patch(`/api/logs/${log.body.id}`).set(auth)
+      .send({ sessionId: s.body.id });
+    expect(patched.status).toBe(200);
+    expect(patched.body.log.sessionId).toBe(s.body.id);
+
+    const bySession = await request(app).get(`/api/logs?sessionId=${s.body.id}`).set(auth);
+    expect(bySession.body.logs).toHaveLength(1);
+  });
+
+  it('refuses to link a log into a session belonging to someone else', async () => {
+    const a = await login('owner@x.com');
+    const b = await login('other@x.com');
+    const theirs = await request(app).post('/api/sessions').set(b).send({ session: aSession() });
+    const mine = await request(app).post('/api/logs').set(a).send({ log: { exercise: 'Rows' } });
+
+    expect((await request(app).patch(`/api/logs/${mine.body.id}`).set(a)
+      .send({ sessionId: theirs.body.id })).status).toBe(404);
+    // And nobody else can touch my log either.
+    expect((await request(app).patch(`/api/logs/${mine.body.id}`).set(b)
+      .send({ sessionId: theirs.body.id })).status).toBe(404);
+  });
+
+  it('rejects a malformed sessionId', async () => {
+    const auth = await login('badid@x.com');
+    const l = await request(app).post('/api/logs').set(auth).send({ log: { exercise: 'Rows' } });
+    expect((await request(app).patch(`/api/logs/${l.body.id}`).set(auth)
+      .send({ sessionId: 'nope' })).status).toBe(400);
+  });
+});

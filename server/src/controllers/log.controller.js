@@ -81,6 +81,8 @@ export async function createSession(req, res) {
 
 export async function listSessions(req, res) {
   const q = { userId: req.user.id };
+  if (typeof req.query.workoutId === 'string' && req.query.workoutId.trim())
+    q.workoutId = req.query.workoutId.trim().slice(0, 64);
   if (req.query.before) {
     const before = new Date(req.query.before);
     if (!isNaN(before.getTime())) q.startedAt = { $lt: before };
@@ -147,6 +149,29 @@ export async function listLogs(req, res) {
     .limit(clampLimit(req.query.limit))
     .lean();
   res.json({ logs: docs.map(logOut) });
+}
+
+// Attach an already-saved log to a session. Sets are written the moment they are logged — a set
+// you spoke must not be lost if the tab closes mid-workout — but the session they belong to only
+// gets an id when the run ends, so the link is made afterwards.
+export async function updateLog(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id))
+    return res.status(404).json({ error: 'Not found' });
+  const sessionId = (req.body && req.body.sessionId) || null;
+  if (sessionId !== null) {
+    if (!mongoose.isValidObjectId(sessionId))
+      return res.status(400).json({ error: 'sessionId is not a valid id.' });
+    // The session must belong to this user, or a log could be linked into someone else's history.
+    const owned = await WorkoutSession.exists({ _id: sessionId, userId: req.user.id });
+    if (!owned) return res.status(404).json({ error: 'Not found' });
+  }
+  const doc = await SetLog.findOneAndUpdate(
+    { _id: req.params.id, userId: req.user.id },
+    { $set: { sessionId } },
+    { new: true }
+  );
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  res.json({ log: logOut(doc) });
 }
 
 export async function removeLog(req, res) {

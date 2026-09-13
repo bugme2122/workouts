@@ -12,6 +12,7 @@ import authRoutes from './routes/auth.routes.js';
 import stateRoutes from './routes/state.routes.js';
 import userRoutes from './routes/users.routes.js';
 import logRoutes from './routes/log.routes.js';
+import discoverRoutes from './routes/discover.routes.js';
 
 // Build the Express app. Kept separate from index.js so tests can import it without binding a port.
 // Route modules (auth, state, users) are added by later tasks; this scaffold wires health + the
@@ -46,6 +47,7 @@ export function buildApp() {
   router.use('/api/auth', authRoutes);
   router.use('/api', stateRoutes); // /api/state, /api/presets, /api/account (verifyJWT per-route)
   router.use('/api', logRoutes);   // /api/sessions, /api/logs, /api/stats
+  router.use('/api', discoverRoutes); // /api/discover
   router.use('/api/users', userRoutes); // /api/users/me
 
   // Single-service deploy (E4): serve the staged client (server/public, produced by

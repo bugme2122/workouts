@@ -94,6 +94,7 @@ export function cloudBackend() {
       const q = new URLSearchParams();
       if (params.limit) q.set("limit", params.limit);
       if (params.before) q.set("before", params.before);
+      if (params.workoutId) q.set("workoutId", params.workoutId);
       const { sessions } = await api.get("/sessions" + (q.toString() ? "?" + q : ""));
       return sessions || [];
     },
@@ -108,7 +109,10 @@ export function cloudBackend() {
       const { logs } = await api.get("/logs" + (q.toString() ? "?" + q : ""));
       return logs || [];
     },
+    async attachLog(id, sessionId) { return api.patch("/logs/" + encodeURIComponent(id), { sessionId }); },
     async deleteLog(id) { await api.del("/logs/" + encodeURIComponent(id)); },
+    // One exercise a day, proxied by our own server so the client CSP stays connect-src 'self'.
+    async discover() { const { exercise } = await api.get("/discover"); return exercise || null; },
   };
 }
 

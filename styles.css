@@ -843,3 +843,84 @@ body.surface-dark .state.part{ color:#e8b463; border-color:#4a3a1c; background:#
   .sess .expand{ grid-column:2; grid-row:2; align-self:center; }
   .sess-detail{ margin-left:0; }
 }
+
+/* ===========================================================================
+   WORKOUT DETAIL (#screen-workout) — prose, not chrome. One column of readable
+   width, the interval strip as the only graphic, and the actions at the end.
+   =========================================================================== */
+#screen-workout .back{ background:none; border:0; padding:0; color:var(--dim);
+  font-family:'Barlow',sans-serif; font-size:14px; font-weight:500; cursor:pointer;
+  text-transform:none; letter-spacing:0; }
+#screen-workout .back:hover{ color:var(--ink); }
+.wktitle{ margin:14px 0 0; font-family:'Barlow',sans-serif; font-size:34px; font-weight:600;
+  letter-spacing:-.025em; line-height:1.08; text-wrap:balance; }
+.wklede{ margin:10px 0 0; font-size:17px; line-height:1.45; max-width:56ch; color:var(--ink); }
+.wkfacts{ display:flex; gap:24px; flex-wrap:wrap; margin-top:18px; padding-block:14px;
+  border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.wkfact .k{ font-size:12.5px; color:var(--dim); }
+.wkfact .v{ font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:19px;
+  font-variant-numeric:tabular-nums; }
+.wkstrip{ margin-top:20px; }
+.wkyours{ margin-top:20px; border:1px solid var(--line); border-radius:14px; padding:15px 18px;
+  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px; align-items:center;
+  background:var(--panel); box-shadow:var(--shadow); }
+.wkyours[hidden]{ display:none; }
+.wkyours h3{ margin:0 0 4px; font-family:'Barlow',sans-serif; font-size:15px; font-weight:600; }
+.wkyours p{ margin:0; color:var(--dim); font-size:14px; }
+.wkyours p b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+.spark{ display:flex; align-items:flex-end; gap:3px; height:34px; }
+.spark i{ width:7px; background:var(--work-soft); border-radius:2px 2px 0 0; min-height:2px; }
+.spark i.last{ background:var(--work-mark); }
+.wkprose{ max-width:64ch; }
+.wkprose h2{ font-family:'Barlow',sans-serif; font-size:17px; font-weight:600; margin:28px 0 8px; }
+.wkprose p{ margin:0 0 10px; line-height:1.55; color:var(--ink); }
+.wkstations{ display:flex; flex-direction:column; margin-top:4px; }
+.wkstation{ display:grid; grid-template-columns:26px minmax(0,1fr) auto; gap:14px; align-items:baseline;
+  padding:11px 0; border-top:1px solid var(--line-soft); }
+.wkstation .n{ font-family:'Barlow Condensed',sans-serif; font-weight:600; color:var(--dim);
+  font-variant-numeric:tabular-nums; }
+.wkstation .ex{ font-weight:600; }
+.wkstation .sub{ color:var(--dim); font-size:13.5px; }
+.wkstation a{ color:var(--dim); font-size:13px; }
+.wkstation a:hover{ color:var(--ink); }
+.wkcta{ display:flex; gap:10px; flex-wrap:wrap; margin-top:26px; padding-top:20px;
+  border-top:1px solid var(--line); }
+.wkshared{ margin-top:10px; font-size:13px; color:var(--dim); word-break:break-all; }
+.wkshared[hidden]{ display:none; }
+
+/* Discover — one exercise a day, proxied through our own API. */
+.lpdiscover{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:20px; align-items:center;
+  background:var(--board); border-radius:14px; padding:18px 20px; }
+.lpdiscover h3{ margin:0 0 6px; font-family:'Barlow',sans-serif; font-size:17px; font-weight:600; }
+.lpdiscover p{ margin:0; color:var(--dim); font-size:14px; max-width:60ch; line-height:1.5; }
+.lpdiscover .src{ margin-top:10px; font-size:12.5px; }
+@media (max-width:840px){ .lpdiscover{ grid-template-columns:1fr; } .wkyours{ grid-template-columns:1fr; } }
+
+/* ===========================================================================
+   SET LOGGING (live screen). Collapsed to a single line until you want it, so
+   it never competes with the clock.
+   =========================================================================== */
+.setlog{ margin:2px 0 -4px; }
+.setlog-open{ background:none; border:0; color:var(--dim); font-family:'Barlow',sans-serif;
+  font-size:13px; font-weight:600; cursor:pointer; padding:2px 0; }
+.setlog-open:hover{ color:var(--ink); }
+.setlog-body[hidden]{ display:none; }
+.setlog-body{ background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  padding:12px 13px; margin-top:8px; }
+.setlog-lab{ display:block; font-family:'Barlow',sans-serif; font-size:13px; color:var(--dim);
+  margin-bottom:7px; }
+.setlog-row{ display:flex; gap:7px; }
+.setlog-input{ flex:1; min-width:0; font-family:'Barlow',sans-serif; font-size:15px;
+  background:var(--panel2); border:1px solid var(--line); color:var(--ink); border-radius:9px;
+  padding:9px 11px; }
+.setlog-mic,.setlog-save{ font-family:'Barlow',sans-serif; font-weight:600; font-size:14px;
+  border-radius:9px; border:1px solid var(--line); background:var(--panel2); color:var(--ink);
+  padding:9px 14px; cursor:pointer; }
+.setlog-mic.on{ border-color:var(--rest-mark); color:var(--rest-mark); }
+.setlog-save{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+.setlog-msg{ margin:8px 0 0; font-size:13px; color:var(--dim); min-height:1em; }
+.setlog-msg.err{ color:var(--rest-mark); }
+.setlog-list{ list-style:none; margin:9px 0 0; padding:0; font-size:13.5px; }
+.setlog-list li{ display:flex; justify-content:space-between; gap:10px; padding:4px 0;
+  border-top:1px solid var(--line-soft); color:var(--dim); }
+.setlog-list li b{ color:var(--ink); font-weight:600; }
