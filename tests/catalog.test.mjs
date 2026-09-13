@@ -89,6 +89,34 @@ test("buildLibrary sanitizes preset data before deriving anything", () => {
   assert.ok(Array.isArray(rows[0].ladder));
 });
 
+// Code review (client, #3): buildLibrary called sanitize() directly instead of sanitize(migrate()),
+// and migrate() is also the null guard (`const src = c || {}`). A null/non-object preset — reachable
+// through a merged cloud presets document — made sanitize(null) throw and blank the whole lobby.
+test("buildLibrary survives a null or non-object preset instead of throwing", () => {
+  assert.doesNotThrow(() => buildLibrary({ presets: { Bad: null, Weird: "nope", Fine: { stations: [{ex:"A"}], ladder: [[30,15]] } } }));
+  const rows = buildLibrary({ presets: { Bad: null, Weird: "nope", Fine: { stations: [{ex:"A"}], ladder: [[30,15]] } } });
+  assert.equal(rows.length, 3);
+  assert.ok(rows.every(r => Array.isArray(r.ladder) && r.ladder.length));
+});
+
+// Code review (client, #4): a stored regimen was read raw, skipping sanitizeRegimen's caps —
+// a regimen with an enormous `rounds` count could hang the tab building the flattened segment list.
+test("buildLibrary caps a regimen with an absurd round count instead of hanging", () => {
+  const rows = buildLibrary({
+    regimens: { Huge: { schema: "regimen@1", name: "Huge",
+      segments: [{ type: "group", rounds: 1e9, segments: [{ type: "work", seconds: 10 }] }] } },
+  });
+  assert.equal(rows.length, 1);
+  // sanitizeRegimen's MAX_SEGMENTS (500) caps the flattened footprint regardless of the claimed
+  // round count, so this returns promptly with a bounded number of minutes rather than ~317 years.
+  assert.ok(rows[0].minutes < 200);
+});
+
+// Code review (client, #4 continued): malformed/non-object regimen data must not throw either.
+test("buildLibrary survives a malformed regimen", () => {
+  assert.doesNotThrow(() => buildLibrary({ regimens: { Bad: null, Weird: "nope", Empty: {} } }));
+});
+
 test("every catalog workout has a blurb short enough for a card", () => {
   CATALOG.forEach(w => {
     assert.equal(typeof w.blurb, "string", w.id + " has a blurb");

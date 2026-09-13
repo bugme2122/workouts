@@ -99,7 +99,15 @@ export function cloudBackend() {
       return sessions || [];
     },
     async deleteSession(id) { await api.del("/sessions/" + encodeURIComponent(id)); },
-    async stats(weeks) { return api.get("/stats" + (weeks ? "?weeks=" + weeks : "")); },
+    async stats(weeks) {
+      // Streaks and week buckets are calendar concepts; without this the server (UTC) attributes
+      // an evening session to the wrong day for anyone west of Greenwich.
+      const tz = -new Date().getTimezoneOffset();
+      const q = new URLSearchParams();
+      if (weeks) q.set("weeks", weeks);
+      q.set("tzOffsetMin", tz);
+      return api.get("/stats?" + q);
+    },
     async saveLog(log) { const r = await api.post("/logs", { log }); return r.log; },
     async listLogs(params = {}) {
       const q = new URLSearchParams();
@@ -134,18 +142,33 @@ export function mergePresetMaps(localPresets, cloudPresets) {
   return { ...(localPresets || {}), ...(cloudPresets || {}) };
 }
 
-// Push every queued session to the cloud, oldest first, and keep whatever still fails. Called
-// on sign-in and after a successful write, so a run recorded offline lands as soon as it can.
+// Single-flight, the same pattern api.js already uses for token refresh: two overlapping calls
+// (a double sign-in, a future second call site) would otherwise both read the same queue, both
+// POST every entry, and the second writer's saveQueue() would clobber the first's result — the
+// visible symptom is the same run appearing twice in History with no way to tell which is real.
+let flushInFlight = null;
+
+// Push every queued session to the cloud, oldest first. A session the server will never accept
+// (4xx — a malformed record from a past client bug) is DROPPED rather than kept: retrying it
+// forever costs a failed request on every sync and can eventually push valid, retryable sessions
+// out past MAX_QUEUE. A network failure or server error (no status, or 5xx) is kept for next time.
 export async function flushSessionQueue(cloud) {
-  if (!cloud) return { sent: 0, kept: local.loadQueue().length };
-  const queued = local.loadQueue();
-  if (!queued.length) return { sent: 0, kept: 0 };
-  const kept = [];
-  let sent = 0;
-  for (const s of queued) {
-    try { await cloud.saveSession(s); sent++; }
-    catch (e) { kept.push(s); }
-  }
-  local.saveQueue(kept);
-  return { sent, kept: kept.length };
+  if (flushInFlight) return flushInFlight;
+  flushInFlight = (async () => {
+    if (!cloud) return { sent: 0, kept: local.loadQueue().length, dropped: 0 };
+    const queued = local.loadQueue();
+    if (!queued.length) return { sent: 0, kept: 0, dropped: 0 };
+    const kept = [];
+    let sent = 0, dropped = 0;
+    for (const s of queued) {
+      try { await cloud.saveSession(s); sent++; }
+      catch (e) {
+        if (e && e.status >= 400 && e.status < 500) dropped++;
+        else kept.push(s);
+      }
+    }
+    local.saveQueue(kept);
+    return { sent, kept: kept.length, dropped };
+  })().finally(() => { flushInFlight = null; });
+  return flushInFlight;
 }

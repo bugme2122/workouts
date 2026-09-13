@@ -10,6 +10,11 @@ const workoutStateSchema = new Schema(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
     configJson: { type: String, default: null },
     presetsJson: { type: String, default: null },
+    // Set only by putState, never by putPresets. The document's own `updatedAt` bumps on EITHER
+    // write, so the client's newest-wins sync (decideMigration) was comparing config staleness
+    // against a timestamp a presets-only save could also move — a preset saved on device A after
+    // a config edit on device B could make B's untouched-but-now-"stale" config lose on sign-in.
+    configUpdatedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

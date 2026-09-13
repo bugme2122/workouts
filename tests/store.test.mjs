@@ -194,25 +194,67 @@ test("flushSessionQueue sends every queued run and empties the queue", async () 
   const sent = [];
   const r = await flushSessionQueue({ saveSession: async s => { sent.push(s.name); } });
   assert.deepEqual(sent, ["A", "B"]);
-  assert.deepEqual(r, { sent: 2, kept: 0 });
+  assert.deepEqual(r, { sent: 2, kept: 0, dropped: 0 });
   assert.deepEqual(local.loadQueue(), []);
 });
 
-test("flushSessionQueue keeps the ones that still fail", async () => {
+test("flushSessionQueue keeps the ones that still fail with no status (offline / 5xx)", async () => {
   stubLocalStorage();
   local.queueSession({ name: "good" });
   local.queueSession({ name: "bad" });
   const r = await flushSessionQueue({
     saveSession: async s => { if (s.name === "bad") throw new Error("offline"); },
   });
-  assert.deepEqual(r, { sent: 1, kept: 1 });
+  assert.deepEqual(r, { sent: 1, kept: 1, dropped: 0 });
   assert.deepEqual(local.loadQueue().map(s => s.name), ["bad"]);
+});
+
+// Code review (server #3): a session the API will NEVER accept (a malformed record from a past
+// client bug) used to be retried forever, costing a failed request on every sync and eventually
+// pushing valid, retryable sessions out past the queue cap. A 4xx now drops it instead of keeping it.
+test("flushSessionQueue drops a session the server rejects with 4xx, rather than retrying forever", async () => {
+  stubLocalStorage();
+  local.queueSession({ name: "malformed" });
+  local.queueSession({ name: "offline-when-tried" });
+  const r = await flushSessionQueue({
+    saveSession: async s => {
+      if (s.name === "malformed") { const e = new Error("bad request"); e.status = 400; throw e; }
+      const e = new Error("server error"); e.status = 503; throw e;
+    },
+  });
+  assert.deepEqual(r, { sent: 0, kept: 1, dropped: 1 });
+  assert.deepEqual(local.loadQueue().map(s => s.name), ["offline-when-tried"]);
 });
 
 test("flushSessionQueue is a no-op with no cloud backend", async () => {
   stubLocalStorage();
   local.queueSession({ name: "A" });
   const r = await flushSessionQueue(null);
-  assert.deepEqual(r, { sent: 0, kept: 1 });
+  assert.deepEqual(r, { sent: 0, kept: 1, dropped: 0 });
   assert.deepEqual(local.loadQueue().map(s => s.name), ["A"]);
+});
+
+// Code review (server #2): two overlapping flushes (a double sign-in, a future second call site)
+// used to both read the same queue and both POST every entry, with the second saveQueue()
+// clobbering the first's result — the visible symptom was the same run appearing twice in History.
+test("flushSessionQueue is single-flight: an overlapping call joins the one already running", async () => {
+  stubLocalStorage();
+  local.queueSession({ name: "A" });
+  local.queueSession({ name: "B" });
+  let calls = 0;
+  let resolveFirst;
+  const gate = new Promise(res => { resolveFirst = res; });
+  const cloud = {
+    saveSession: async s => {
+      calls++;
+      if (s.name === "A") await gate; // hold the first send open
+    },
+  };
+  const p1 = flushSessionQueue(cloud);
+  const p2 = flushSessionQueue(cloud); // fires while p1 is mid-flight
+  resolveFirst();
+  const [r1, r2] = await Promise.all([p1, p2]);
+  assert.deepEqual(r1, r2);          // both callers see the same result...
+  assert.equal(calls, 2);            // ...because there was only ever one pass over the queue
+  assert.deepEqual(local.loadQueue(), []);
 });

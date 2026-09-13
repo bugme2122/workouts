@@ -1,5 +1,5 @@
-import { enc, dec, sanitize, sameCircuit, lightDelta, applyLight,
-         summarizeConfig, classifyPreset } from "./engine.js";
+import { enc, dec, sanitize, migrate, sameCircuit, lightDelta, applyLight,
+         summarizeConfig, classifyPreset, sanitizeRegimen } from "./engine.js";
 
 export { sanitize };
 
@@ -188,7 +188,10 @@ export function buildLibrary({ presets = {}, regimens = {}, pins = [] } = {}) {
   const rows = [];
 
   Object.keys(presets).forEach(name => {
-    const cfg = sanitize(JSON.parse(JSON.stringify(presets[name])));
+    // Rule 1: sanitize(migrate(cfg)), cloned first. A preset that round-tripped through the
+    // cloud can be null/non-object (migrate() is also the null guard) — skipping migrate() here
+    // let sanitize(null) throw and blank the whole lobby.
+    const cfg = sanitize(migrate(JSON.parse(JSON.stringify(presets[name] || {}))));
     const sum = summarizeConfig(cfg);
     const origin = classifyPreset(cfg, baselineFor(cfg.workoutId));
     const from = origin === "edited" ? (WORKOUTS.find(w => w.id === cfg.workoutId) || {}).name : "";
@@ -200,7 +203,10 @@ export function buildLibrary({ presets = {}, regimens = {}, pins = [] } = {}) {
   });
 
   Object.keys(regimens).forEach(name => {
-    const r = regimens[name] || {};
+    // sanitizeRegimen caps MAX_SEGMENTS/MAX_ROUNDS and nesting depth. Deriving from the raw
+    // stored value skipped that cap — a regimen with e.g. rounds:1e9 or deep nesting could hang
+    // the tab building the flattened list below.
+    const r = sanitizeRegimen(JSON.parse(JSON.stringify(regimens[name] || {})));
     // A regimen's "ladder", for the interval strip, is its FLATTENED work/rest pairs — groups
     // expanded, so a 3-round group draws three peaks instead of one slab. Capped so a 500-segment
     // upload can't produce a 500-bar strip.
